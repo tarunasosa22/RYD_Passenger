@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "675552296",
+    "project_id": "ryd-taxi",
+    "storage_bucket": "ryd-taxi.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:675552296:android:c556cab60bd222b090691d",
+        "android_client_info": {
+          "package_name": "com.rydpassenger.client"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA6NjFfJXhR8ZXcS4BXCsS5rn00E3VHxrE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

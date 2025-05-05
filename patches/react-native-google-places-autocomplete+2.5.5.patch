@@ -1,0 +1,13 @@
+diff --git a/node_modules/react-native-google-places-autocomplete/GooglePlacesAutocomplete.js b/node_modules/react-native-google-places-autocomplete/GooglePlacesAutocomplete.js
+index 5d8cb1e..b577bcb 100644
+--- a/node_modules/react-native-google-places-autocomplete/GooglePlacesAutocomplete.js
++++ b/node_modules/react-native-google-places-autocomplete/GooglePlacesAutocomplete.js
+@@ -151,7 +151,7 @@ export const GooglePlacesAutocomplete = forwardRef((props, ref) => {
+ 
+   useEffect(() => {
+     // This will load the search results after the query object ref gets changed
+-    _handleChangeText(stateText);
++    // _handleChangeText(stateText);
+     return () => {
+       _abortRequests();
+     };

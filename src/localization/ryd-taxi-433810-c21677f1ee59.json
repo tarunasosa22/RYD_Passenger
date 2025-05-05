@@ -1,0 +1,14 @@
+{
+  "type": "service_account",
+  "project_id": "ryd-taxi-433810",
+  "private_key_id": "c21677f1ee59fd9bc431ee801144f42c1148b56d",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCX8ocMHFqWh2lH\nRYDKmb8NC/+uaCqqzxiIjKotoI1ded1Zgs1gQP3Ed44YyCot6tXwFn1M6aJthuTn\nNU/YXkYaIcTaOJBUDie2nv77IgEoZS0j1ZCxxzLNOoxLmjZeFVpQVOsdutcijFgq\n35YtvTa/EY/v3TgK2o5skjWyHrlTQV8vjquK6Jt66mSuKZrF3TdKB+NPkHx8nOje\n5ZUWcID9CwP8rZAGRYvArlif4HbMhMciaCNrZ2Imz2yQHiKM9rwFHvO3FknS7wX8\nAfDmg5cb+vo3rm4PeoJR3wEuHB9OhVwo8jL03oeICIrD/Z8nEcIn2rGPLKWvOdBk\nkmDkrOZnAgMBAAECggEAAPS8Ash+4r7msQBv8gELoa0Mpm/uAiBxcBJ/05pUqVzl\n6/VAY4r6eGz5eOXG1ikfFXaewogfHH9NG2NLevoE3jnjf4Km7dB0/CzTP93pPJ7T\nrOEKxa481JZktukOedhlNrzXXzAuFaqPt3KsAuJTi4TfGfborlt3qpk05fJUNNY2\n+REB+0pSrVEkAyOCji6YUAIjyyVBLNP7sqVK98UJ6AFrkFybsuhUIzUcrZqrx53k\ntptwwMlQXsOEF9LY134NXX9z2axUdQep0qXY2Aq7UuTZ4xeYn3CkFzOmTnk3CDfO\ncgzjRbp20Rm625tjoMDdujKDlREXxLYXSSrzpzEdyQKBgQDL/GUAdL0ijAqWyEr/\n/tlBz/yyyQYv1oDRsEIyUnKumN8++SN1Ifvo5BVsyhvZdDDFlbtIWJuZBq8WEdvx\nbU46/euprmK9MfgJnsuJXQPOrfZ5incEU0PGgGKgAAYS3jnw+OclD3jKDMOst6cU\nTY0l8Klu9TvYYajdAh02IJIX0wKBgQC+sTVvTJ26963ubEVxXwg0bfdx88f6pPoH\n5CQkpB3kyFcVPWEXQqQL3hkYgYdTSM19NAERkWjD50j9Svi5gF7q2mejkPiXKrhe\n4xvQ8dwQRIS9+D8/SZr7qEG0F2lX6hUy/E4dCPMp/OVIAWxVXhMb3aOieTymGolL\nl7QxF6ZOnQKBgFaNoc2vuxENmvCfzDMTT9w9BFxYL+fcfIx83Zm8oiyzcQancAQj\nh2AqZ2zh1S9PveIYxn7MGjm0PFaA/XJTjv44/+XfuMXOjhCG8JY4gYURC6RGvHl5\nWyi/ERoS6IDZCnzVID75cadKAz0mMB7NSTbwBvSt2dbWmXAtlXeCGntBAoGAVzz+\n8yIb7tMssSy7QDh3qnS8hVc/n70l3cJTfqfOPUIiBMeFyXxlTECZPorTfBiMWcEW\n1BCv2x/OVoKb81F1GwA79ap278FNg6tmqFpdkNun1rjhRnTIAGVjWZ50RRIEDMU8\nfy/+/rCBvEVaaFuXZmIpYEUSp/Lv6LNIbkUhgkkCgYAMjC4iMGMZVqwQxeycM8xp\nVznq3G7zRNAqZs8mifw6MnGD5i2vDjaygtcYbxip49ewySf5AwenVUT2SqbCbn2Z\n+3DslnK0PHMo7G3Jtn1pyd4yktVgoMS1oCdKh3IQ6wgCZHa85ZzOCPJ7vx9bFw7y\nNU9+S4PluwustIm4G8V8gQ==\n-----END PRIVATE KEY-----\n",
+  "client_email": "ryd-taxi@ryd-taxi-433810.iam.gserviceaccount.com",
+  "client_id": "106016432071827819850",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/ryd-taxi%40ryd-taxi-433810.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com",
+  "sheet_id" : "1pEfbgYm43DedEjCDAEf8N6gNVH25_0gPNxrKhZY93aU"
+}

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    >
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:gravity="bottom"
+        android:layout_height="match_parent"
+        android:background="@color/app_bg"
+        >
+        <ImageView
+            android:layout_width="match_parent"
+            android:layout_height="150dp"
+            android:background="@drawable/bottom_spash_icon"
+            android:scaleType="center" />
+    </LinearLayout>
+
+    <RelativeLayout
+        android:layout_width="350dp"
+        android:layout_height="280dp"
+        android:background="@drawable/bootsplash_logo"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="150dp"
+        />
+</RelativeLayout>
