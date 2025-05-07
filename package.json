@@ -8,7 +8,8 @@
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest",
-    "postinstall": "npx patch-package"
+    "postinstall": "npx patch-package",
+    "getLang": "(cd src/localization && node script.js)"
   },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.1.1",
@@ -62,7 +63,7 @@
     "react-native-keyboard-aware-scroll-view": "^0.9.5",
     "react-native-keyboard-controller": "^1.16.6",
     "react-native-linear-gradient": "^2.8.3",
-    "react-native-maps": "^1.20.1",
+    "react-native-maps": "1.20.1",
     "react-native-maps-directions": "^1.9.0",
     "react-native-modal": "^13.0.1",
     "react-native-otp-entry": "^1.8.2",
@@ -76,7 +77,7 @@
     "react-native-responsive-screen": "^1.4.2",
     "react-native-restart": "^0.0.27",
     "react-native-safe-area-context": "^5.2.0",
-    "react-native-screens": "^4.6.0",
+    "react-native-screens": "4.6.0",
     "react-native-share": "^12.0.3",
     "react-native-splash-screen": "^3.3.0",
     "react-native-svg": "^15.11.1",

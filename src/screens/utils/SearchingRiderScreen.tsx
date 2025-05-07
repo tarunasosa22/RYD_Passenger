@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, BackHandler, DeviceEventEmitter, EventEmitter, Image, ImageBackground, NativeModules, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, BackHandler, DeviceEventEmitter, EventEmitter, Image, ImageBackground, Modal, NativeModules, Platform, StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { heightPercentageToDP as hp, widthPercentageToDP as wp } from 'react-native-responsive-screen';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,7 +20,7 @@ import CustomPrimaryButton from '../../components/CustomPrimaryButton';
 import CustomBottomSheet from '../../components/CustomBottomSheet';
 import BottomSheet from '@gorhom/bottom-sheet/lib/typescript/components/bottomSheet/BottomSheet';
 import { Marker } from 'react-native-maps';
-import { BottomSheetBackdrop, BottomSheetBackdropProps, BottomSheetView } from '@gorhom/bottom-sheet';
+import { BottomSheetBackdrop, BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import { RIDE_DETAILS } from '../../config/Host';
 import { SOCKET_STATUS } from '../../utils/Constats';
 import { cancelRide, deleteRideBooking, resetDeliveryDetails, resetRideDetailsData, setTipBtnOn, showActiveRideModalReducer } from '../../redux/slice/rideSlice/RideSlice';
@@ -32,6 +32,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import i18n from '../../localization/i18n';
 import { stateType } from '../../types/DataTypes';
 import CustomContainer from '../../components/CustomContainer';
+import { navigationRef } from '../../utils/NavigationServices';
 
 const { StatusBarManager } = NativeModules;
 const DriverList = [
@@ -81,6 +82,7 @@ const SearchingRiderScreen = () => {
     const snapPoints = useMemo(() => snapPoint, [snapPoint]);
     const [bottomSheetVisible, setBottomSheetVisible] = useState<boolean>(false)
     const [intervalId, setIntervalId] = useState<NodeJS.Timeout | number>(0);
+    const [reason, setReason] = useState("")
     const { t } = useTranslation();
     const [steps, setSteps] = useState<number>(store.getState().HomeSlice.lastActiveStep ?? 0);
     const totalSeconds = 95; // Total time in seconds
@@ -92,6 +94,13 @@ const SearchingRiderScreen = () => {
     const isDeliveryModule = route?.params?.isDeliveryModule ?? false
     const progressStatus = useRef()
     const isCancelCalled = useRef<boolean>(false);
+    const GlobalStyles = useGlobalStyles();
+    const [modalVisible, setModalVisible] = useState({
+        modalVisible: false,
+        type: ''
+    })
+
+    const rideDetailRef = useRef()
 
 
     useEffect(() => {
@@ -146,75 +155,170 @@ const SearchingRiderScreen = () => {
             console.log("CONNECTION OPEN");
         })
         wsRef.current.addEventListener("close", () => {
-            console.log("CONNECTION CLOSE");
-            if (navigation.getId() == "SearchingRiderScreen") {
-                setTimeout(() => {
+            setTimeout(() => {
+                console.log("CONNECTION CLOSE", rideDetailRef.current, focus, navigationRef.current?.getCurrentRoute()?.name);
+                if (focus && navigationRef.current?.getCurrentRoute()?.name == "SearchingRiderScreen" && !rideDetailRef.current?.isTimeOut) {
                     connectionInit()
-                }, 1000);
-            }
+                }
+            }, 1000);
 
         })
         wsRef.current.addEventListener("message", (message) => {
-            console.log("MESSAGE_FIND_DRIVER", message)
-            const msgDetails = JSON.parse(message.data)
-            // const msgDetails2 = JSON.parse(msgDetails)
-            console.log('msgDetails', msgDetails, msgDetails?.find_driver_progress)
-            console.log("msgDetails?.find_driver_progress?.status-->", msgDetails?.find_driver_progress?.status)
-            if (msgDetails?.find_driver_progress?.status === "DRIVER_ALLOCATED") {
-                dispatch(setAppliedCoupon(-1))
-                dispatch(showActiveRideModalReducer({
-                    isFirstTime: true,
-                    visibleModal: false
-                }))
-                navigation.reset({
-                    index: 1, routes: [
-                        {
-                            name: 'DrawerStack',
-                        },
-                        {
-                            name: 'TrackDriverScreen', params: {
-                                rideId: msgDetails?.find_driver_progress?.ride_booking_id,
+            try {
+                console.log("MESSAGE_FIND_DRIVER", message)
+                const msgDetails = JSON.parse(message.data)
+                // const msgDetails2 = JSON.parse(msgDetails)
+                console.log('CONNECTION', msgDetails, msgDetails?.find_driver_progress, msgDetails?.rideBooking?.isTimeOut, msgDetails?.rideBooking?.rideStatus)
+                if (msgDetails?.rideBooking?.rideCancelBy?.reason) {
+                    setReason(msgDetails?.rideBooking?.rideCancelBy?.reason)
+                }
+                rideDetailRef.current = msgDetails?.rideBooking
+
+                if (msgDetails?.rideBooking) {
+                    if (msgDetails?.rideBooking?.rideStatus === "DRIVER_ALLOCATED" || msgDetails?.find_driver_progress?.status === "DRIVER_ALLOCATED") {
+                        dispatch(setAppliedCoupon(-1))
+                        dispatch(showActiveRideModalReducer({
+                            isFirstTime: true,
+                            visibleModal: false
+                        }))
+                        wsRef.current?.close()
+                        setTimeout(() => {
+                            navigation.reset({
+                                index: 1, routes: [
+                                    {
+                                        name: 'DrawerStack',
+                                    },
+                                    {
+                                        name: 'TrackDriverScreen', params: {
+                                            rideId: msgDetails?.rideBooking?.id ?? msgDetails?.find_driver_progress?.ride_booking_id,
+                                        }
+                                    }
+                                ]
+                            })
+                        }, 500);
+                    } else if (msgDetails?.rideBooking?.rideStatus === "CANCELLED") {
+                        dispatch(setPaymentMethod("Card"))
+                        setTimeout(() => {
+                            setModalVisible({
+                                modalVisible: true,
+                                type: 'RideCancel'
+                            })
+                        }, 100);
+                    } else if (msgDetails?.find_driver_progress?.status == "Driver not assigned" || msgDetails?.rideBooking?.isTimeOut) {
+                        setProgress(0)
+                        setSteps(0)
+                        clearInterval(intervalId)
+                        dispatch(setIsComplateTimer(true))
+                        setBottomSheetVisible(true)
+                        wsRef.current?.close()
+                        bottomSheetRef.current?.snapToIndex(0)
+                    }
+                } else {
+                    if (msgDetails?.find_driver_progress?.status == "Driver not assigned" || msgDetails?.rideBooking?.isTimeOut) {
+                        setProgress(0)
+                        setSteps(0)
+                        clearInterval(intervalId)
+                        dispatch(setIsComplateTimer(true))
+                        setBottomSheetVisible(true)
+                        wsRef.current?.close()
+                        bottomSheetRef.current?.snapToIndex(0)
+                    } else if (msgDetails?.rideBooking?.isTimeOut == null || msgDetails?.find_driver_progress) {
+                        progressStatus.current = msgDetails?.find_driver_progress
+                        let step = steps + 1
+                        console.log("+steps-->", steps, step)
+                        if (msgDetails?.find_driver_progress == 19 || (msgDetails?.find_driver_progress == 38)) {
+                            setSteps(0)
+                            dispatch(setLastActibeStep(0))
+                        } else if (msgDetails?.find_driver_progress == 57 || msgDetails?.find_driver_progress == 76) {
+                            setSteps(1)
+                            dispatch(setLastActibeStep(1))
+                        } else if (msgDetails?.find_driver_progress == 95 || msgDetails?.find_driver_progress == 114) {
+                            setSteps(2)
+                            dispatch(setLastActibeStep(2))
+                        } else if (msgDetails?.find_driver_progress == 133 || msgDetails?.find_driver_progress == 152) {
+                            setSteps(3)
+                            dispatch(setLastActibeStep(3))
+                        } else if (msgDetails?.find_driver_progress == 171 || msgDetails?.find_driver_progress == 190) {
+                            setSteps(4)
+                            dispatch(setLastActibeStep(4))
+                        } else {
+                            if (store.getState().HomeSlice.lastActiveStep) {
+                                setSteps(store.getState().HomeSlice.lastActiveStep)
+                            } else {
+                                setSteps(0)
                             }
                         }
-                    ]
-                })
-            }
-            else if (msgDetails?.find_driver_progress?.status == "Driver not assigned") {
-                setProgress(0)
-                setSteps(0)
-                clearInterval(intervalId)
-                dispatch(setIsComplateTimer(true))
-                setBottomSheetVisible(true)
-                wsRef.current?.close()
-                bottomSheetRef.current?.snapToIndex(0)
-            } else if (msgDetails?.find_driver_progress) {
-                progressStatus.current = msgDetails?.find_driver_progress
-                let step = steps + 1
-                console.log("+steps-->", steps, step)
-                if (msgDetails?.find_driver_progress == 19 || (msgDetails?.find_driver_progress == 38)) {
-                    setSteps(0)
-                    dispatch(setLastActibeStep(0))
-                } else if (msgDetails?.find_driver_progress == 57 || msgDetails?.find_driver_progress == 76) {
-                    setSteps(1)
-                    dispatch(setLastActibeStep(1))
-                } else if (msgDetails?.find_driver_progress == 95 || msgDetails?.find_driver_progress == 114) {
-                    setSteps(2)
-                    dispatch(setLastActibeStep(2))
-                } else if (msgDetails?.find_driver_progress == 133 || msgDetails?.find_driver_progress == 152) {
-                    setSteps(3)
-                    dispatch(setLastActibeStep(3))
-                } else if (msgDetails?.find_driver_progress == 171 || msgDetails?.find_driver_progress == 190) {
-                    setSteps(4)
-                    dispatch(setLastActibeStep(4))
-                } else {
-                    if (store.getState().HomeSlice.lastActiveStep) {
-                        setSteps(store.getState().HomeSlice.lastActiveStep)
-                    } else {
-                        setSteps(0)
                     }
                 }
+
+                // if (msgDetails?.rideBooking?.rideStatus === "DRIVER_ALLOCATED" || msgDetails?.find_driver_progress?.status === "DRIVER_ALLOCATED") {
+                //     dispatch(setAppliedCoupon(-1))
+                //     dispatch(showActiveRideModalReducer({
+                //         isFirstTime: true,
+                //         visibleModal: false
+                //     }))
+                //     wsRef.current?.close()
+                //     setTimeout(() => {
+                //         navigation.reset({
+                //             index: 1, routes: [
+                //                 {
+                //                     name: 'DrawerStack',
+                //                 },
+                //                 {
+                //                     name: 'TrackDriverScreen', params: {
+                //                         rideId: msgDetails?.rideBooking?.id ?? msgDetails?.find_driver_progress?.ride_booking_id,
+                //                     }
+                //                 }
+                //             ]
+                //         })
+                //     }, 500);
+                // } else if (msgDetails?.find_driver_progress?.status == "Driver not assigned" || msgDetails?.rideBooking?.isTimeOut) {
+                //     setProgress(0)
+                //     setSteps(0)
+                //     clearInterval(intervalId)
+                //     dispatch(setIsComplateTimer(true))
+                //     setBottomSheetVisible(true)
+                //     wsRef.current?.close()
+                //     bottomSheetRef.current?.snapToIndex(0)
+                // } else if (msgDetails?.rideBooking?.isTimeOut == null || msgDetails?.find_driver_progress) {
+                //     progressStatus.current = msgDetails?.find_driver_progress
+                //     let step = steps + 1
+                //     console.log("+steps-->", steps, step)
+                //     if (msgDetails?.find_driver_progress == 19 || (msgDetails?.find_driver_progress == 38)) {
+                //         setSteps(0)
+                //         dispatch(setLastActibeStep(0))
+                //     } else if (msgDetails?.find_driver_progress == 57 || msgDetails?.find_driver_progress == 76) {
+                //         setSteps(1)
+                //         dispatch(setLastActibeStep(1))
+                //     } else if (msgDetails?.find_driver_progress == 95 || msgDetails?.find_driver_progress == 114) {
+                //         setSteps(2)
+                //         dispatch(setLastActibeStep(2))
+                //     } else if (msgDetails?.find_driver_progress == 133 || msgDetails?.find_driver_progress == 152) {
+                //         setSteps(3)
+                //         dispatch(setLastActibeStep(3))
+                //     } else if (msgDetails?.find_driver_progress == 171 || msgDetails?.find_driver_progress == 190) {
+                //         setSteps(4)
+                //         dispatch(setLastActibeStep(4))
+                //     } else {
+                //         if (store.getState().HomeSlice.lastActiveStep) {
+                //             setSteps(store.getState().HomeSlice.lastActiveStep)
+                //         } else {
+                //             setSteps(0)
+                //         }
+                //     }
+                // } else if (msgDetails?.rideBooking?.rideStatus === "CANCELLED") {
+                //     dispatch(setPaymentMethod("Card"))
+                //     setTimeout(() => {
+                //         setModalVisible({
+                //             modalVisible: true,
+                //             type: 'RideCancel'
+                //         })
+                //     }, 100);
+                // }
+                // dispatch(setWithDrawalMoney(msgDetails))
+            } catch (e) {
+                throw new Error("App crash on goint to track driver screen from the searching");
             }
-            // dispatch(setWithDrawalMoney(msgDetails))
         })
     }
 
@@ -222,7 +326,7 @@ const SearchingRiderScreen = () => {
         if (from === "BookingScreen" || from === "DeliveyReviewScreen") {
             findRideApiCall()
         } else if (from == "HomeScreen" || from == "DeliveryHomeScreen") {
-            if (isAppCloseOrOpen) {
+            if (isAppCloseOrOpen && navigationRef.current?.getCurrentRoute()?.name == "SearchingRiderScreen" && !rideDetailRef.current?.isTimeOut) {
                 connectionInit()
             } else {
                 wsRef.current?.close()
@@ -277,8 +381,11 @@ const SearchingRiderScreen = () => {
             // dispatch(setLastActiveTime(moment().toString()))
             dispatch(setIsComplateTimer(false))
             dispatch(setIsRefundText(false))
-            connectionInit()
-            dispatch(findDriver(id))
+            dispatch(findDriver(id)).unwrap().then((res) => {
+                setTimeout(() => {
+                    connectionInit()
+                }, 500);
+            })
         }
     }
 
@@ -391,14 +498,14 @@ const SearchingRiderScreen = () => {
                     icon={Icons.LEFT_ARROW_ICON}
                     iconStyle={{ transform: [{ rotate: locale ? '180deg' : '0deg' }] }}
                 />
-                <Text style={Styles.headerTxtStyle}>{t(TranslationKeys.searching_ride_header)}</Text>
+                <Text style={Styles.headerTxtStyle}>{isDeliveryModule ? t(TranslationKeys.searching_delivery_header) : t(TranslationKeys.searching_ride_header)}</Text>
             </View>
 
             {!bottomSheetVisible ? <>
                 <ImageBackground source={ImagesPaths.TRANSPARENT_BACKGROUND_IMAGE} style={Styles.gradientStyle}>
                     <View style={Styles.imageMainContainerStyle}>
                         <Image source={ImagesPaths.SEARCH_TAXI} style={Styles.taxiImageStyle} />
-                        <Text style={Styles.searchingRideTxtStyle}>{t(TranslationKeys.searching_ride)}</Text>
+                        <Text style={Styles.searchingRideTxtStyle}>{isDeliveryModule ? t(TranslationKeys.searching_delivery) : t(TranslationKeys.searching_ride)}</Text>
                         <Text
                             style={Styles.takeAFewTxtStyle}
                         >{t(TranslationKeys.this_mmay_take_a_few_seconds)}</Text>
@@ -502,13 +609,13 @@ const SearchingRiderScreen = () => {
                     paddingBottom: wp(3)
                 }}
             >
-                <BottomSheetView style={{ flex: 1, justifyContent: "space-around" }}>
+                <View style={{ flex: 1, justifyContent: "space-around" }}>
                     <View style={[GlobalStyle.centerContainer, { flex: 1 }]}>
                         {isLoading ? < ActivityIndicator size={'large'} color={colors.PRIMARY} /> :
                             <>
                                 <Image source={store.getState().HomeSlice.isComplateTimer ? ImagesPaths.RIDE_RETRY : ImagesPaths.RIDE_NOT_FOUND_IMAGE} style={Styles.rideNotFoundIamgeStyle} />
                                 <Text numberOfLines={1}
-                                    style={Styles.rideNotFoundTxtStyle}>{t(TranslationKeys.ride_not_found)}</Text>
+                                    style={Styles.rideNotFoundTxtStyle}>{isDeliveryModule ? t(TranslationKeys.delivery_not_found) : t(TranslationKeys.ride_not_found)}</Text>
                                 <Text
                                     style={[Styles.pleaseTryAgainTxtStyle, { textAlign: "center" }]}>
                                     {store.getState().HomeSlice.isRefundText ? t(TranslationKeys.refund_time_frame) : store.getState().HomeSlice.isComplateTimer ? t(TranslationKeys.please_try_again) : t(TranslationKeys.please_try_again_in_a_few_minutes)}
@@ -574,8 +681,41 @@ const SearchingRiderScreen = () => {
                             }} title={store.getState().HomeSlice.isComplateTimer ? t(TranslationKeys.cancel) : t(TranslationKeys.got_it)}
                             style={[GlobalStyle.primaryBtnStyle, { marginVertical: 0, width: store.getState().HomeSlice.isComplateTimer ? '45%' : '100%' }]} />
                     </View>
-                </BottomSheetView>
+                </View>
             </CustomBottomSheet>
+
+            {modalVisible.modalVisible &&
+                <Modal
+                    animationType="slide"
+                    transparent={false}
+                    visible={modalVisible.modalVisible}>
+                    <View style={[GlobalStyles.centerContainer, { flex: 1 }]}>
+                        <Image
+                            source={modalVisible?.type === "RideCancel" ? Icons.CANCELTAXIICON : Icons.CHECKBOX}
+                            style={[Styles.completedIcon, {
+                                tintColor: (modalVisible?.type === "RideCancel") ? colors.ERROR_TEXT : undefined
+                            }]} />
+
+                        <>
+                            <Text style={Styles.headingText}>{t(TranslationKeys.booking_Cancelled)}</Text>
+                            {reason !== "" ? <Text style={[GlobalStyles.subTitleStyle, Styles.subtitleText]}>{t(TranslationKeys.cancellation_statement)}&nbsp;{reason}</Text> : null}
+                        </>
+
+
+                    </View>
+                    <CustomBottomBtn onPress={() => {
+                        if (modalVisible?.type === "RideCancel") {
+                            navigation.reset({
+                                index: 0,
+                                routes: [{
+                                    name: 'DrawerStack',
+                                }]
+                            })
+                        }
+                    }} title={t(TranslationKeys.got_it)}
+                    // style={Styles.completedButton}
+                    />
+                </Modal>}
         </SafeAreaView>
     );
 };
@@ -601,6 +741,26 @@ const useStyles = () => {
             color: colors.PRIMARY_TEXT,
             fontFamily: Fonts.FONT_POP_MEDIUM,
             fontSize: FontSizes.FONT_SIZE_15,
+        },
+        completedIcon: {
+            width: wp(20),
+            height: wp(20),
+            resizeMode: 'contain',
+            tintColor: colors.PRIMARY,
+            borderRadius: wp(10)
+        },
+        headingText: {
+            fontSize: FontSizes.FONT_SIZE_18,
+            fontFamily: Fonts.FONT_POP_SEMI_BOLD,
+            color: colors.PRIMARY_TEXT,
+            textAlign: 'center',
+            paddingTop: wp(5)
+        },
+        subtitleText: {
+            textAlign: 'center',
+            color: colors.SECONDARY_TEXT,
+            marginHorizontal: wp(5),
+            marginVertical: wp(2),
         },
         gradientStyle: {
             height: hp(100),

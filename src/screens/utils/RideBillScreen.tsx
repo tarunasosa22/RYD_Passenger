@@ -10,7 +10,6 @@ import useCustomNavigation from '../../hooks/useCustomNavigation'
 import CustomContainer from '../../components/CustomContainer'
 import moment from 'moment'
 import { widthPercentageToDP as wp } from 'react-native-responsive-screen'
-import { getAllWithoutPhotos } from 'react-native-contacts'
 import { Image } from 'react-native'
 import { ImagesPaths } from '../../utils/ImagesPaths'
 import { AirbnbRating } from 'react-native-ratings'
@@ -18,7 +17,7 @@ import { Icons } from '../../utils/IconsPaths'
 import { Fonts } from '../../styles/Fonts'
 import CommonDraggableItem from '../../components/CommonDraggableItem'
 import CommonDraggableDashView from '../../components/CommonDraggableDashView'
-import { RideLocationTypes, resetRideOtpReducer, rideBillPdf, setRideStatusReducer } from '../../redux/slice/rideSlice/RideSlice'
+import { RideLocationTypes, resetRideOtpReducer, rideBillPdf, setCustomTip, setRideStatusReducer, setTipAmount, setTipConatinerVisible } from '../../redux/slice/rideSlice/RideSlice'
 import { FontSizes } from '../../styles/FontSizes'
 import ZigzagLines from 'react-native-zigzag-lines'
 import CustomBottomBtn from '../../components/CustomBottomBtn'
@@ -37,6 +36,7 @@ import { useLanguage } from '../../context/LanguageContext'
 import 'moment/locale/ar';
 import 'moment/locale/en-gb';
 import 'moment/locale/hi'
+import { riderDetails } from '../../redux/slice/authSlice/AuthSlice'
 
 const RideBillScreen = () => {
   const GlobalStyle = useGlobalStyles()
@@ -210,6 +210,8 @@ const RideBillScreen = () => {
       {(rideLoading) ? <CustomActivityIndicator /> : null}
       <ScrollView style={GlobalStyle.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
         <CustomHeader onPress={() => {
+          dispatch(setTipAmount(0))
+          dispatch(setCustomTip(''))
           navigation.goBack()
         }}
           title={createRideDateTime}
@@ -223,12 +225,12 @@ const RideBillScreen = () => {
         <CustomContainer>
           <View style={[GlobalStyle.rowContainer, Styles.profileContainer, { justifyContent: 'space-between' }]}>
             <View style={GlobalStyle.rowContainer}>
-              <Image source={rideDetails?.driver?.profilePic && !userImageError ? { uri: rideDetails?.driver?.profilePic } : ImagesPaths.EMPTY_IMAGE} onError={() => {
+              <Image source={(rideDetails?.driver?.profilePic == null ? rideDetails?.deletedUser[0]?.profilePic : rideDetails?.driver?.profilePic) && !userImageError ? { uri: (rideDetails?.driver?.profilePic == null ? rideDetails?.deletedUser[0]?.profilePic : rideDetails?.driver?.profilePic) } : ImagesPaths.EMPTY_IMAGE} onError={() => {
                 setUserImageError(true)
               }} style={Styles.userProfileStyle} />
               <View style={{ marginLeft: wp(3) }}>
-                <Text style={GlobalStyle.subTitleStyle}>{rideDetails?.driver?.name ?? t(TranslationKeys.driver_not_found)}</Text>
-                <Text style={Styles.commonTxtStyle}>{rideDetails?.driverCar?.name}</Text>
+                <Text style={GlobalStyle.subTitleStyle}>{rideDetails?.driver?.name == null ? rideDetails?.deletedUser[0]?.name : rideDetails?.driver?.name}</Text>
+                <Text style={Styles.commonTxtStyle}>{rideDetails?.priceModel?.carType}</Text>
               </View>
             </View>
             <View style={Styles.completeContainer}>
@@ -236,13 +238,13 @@ const RideBillScreen = () => {
             </View>
           </View>
           {rideDetails?.deliveryDetails && (
-          <View>
-            <Text style={[Styles.commonTxtStyle, {marginTop:wp(2), fontFamily: Fonts.FONT_POP_SEMI_BOLD}]}>{t(TranslationKeys.delivery_ride)}</Text>
-            <View style={[GlobalStyle.rowContainer, { justifyContent: 'space-between' }]}>
-              <Text style={[Styles.requestTxtStyle,]}>{rideDetails?.deliveryDetails?.goodsType}</Text>
-              <Text style={[Styles.requestTxtStyle,]}>{rideDetails?.deliveryDetails?.goodsWeight}{t(TranslationKeys.kg)} {rideDetails?.deliveryDetails?.goodsPackage}</Text>
+            <View>
+              <Text style={[Styles.commonTxtStyle, { marginTop: wp(2), fontFamily: Fonts.FONT_POP_SEMI_BOLD }]}>{t(TranslationKeys.delivery_ride)}</Text>
+              <View style={[GlobalStyle.rowContainer, { justifyContent: 'space-between' }]}>
+                <Text style={[Styles.requestTxtStyle,]}>{rideDetails?.deliveryDetails?.goodsType}</Text>
+                <Text style={[Styles.requestTxtStyle,]}>{rideDetails?.deliveryDetails?.goodsWeight}{t(TranslationKeys.kg)} {rideDetails?.deliveryDetails?.goodsPackage}</Text>
+              </View>
             </View>
-          </View>
           )}
           <View style={Styles.itemSeprator} />
           <View style={[GlobalStyle.rowContainer, { justifyContent: 'space-between' }]}>
@@ -365,9 +367,12 @@ const RideBillScreen = () => {
         </CustomContainer>
       </ScrollView>
       <CustomBottomBtn onPress={() => {
+        dispatch(setTipAmount(0))
+        dispatch(setCustomTip(''))
         dispatch(setRideStatusReducer(undefined))
         dispatch(resetRideOtpReducer())
         dispatch(setPaymentMethod("Card"))
+        dispatch(setTipConatinerVisible(false))
         if (rideDetails?.rideStatus === RIDE_STATUS.CANCELLED) {
           navigation.reset({
             index: 0,
@@ -422,7 +427,7 @@ const RideBillScreen = () => {
           }
           // }
         }
-      }} title={from === "YourRidesScreen" ? t(TranslationKeys.got_it) : t(TranslationKeys.end_ride)}
+      }} title={from === "YourRidesScreen" ? t(TranslationKeys.got_it) : store.getState().RideSlice.rideDetails?.deliveryDetails ? t(TranslationKeys.end_delivery) : t(TranslationKeys.end_ride)}
       // style={Styles.completedButton}
       />
 

@@ -174,6 +174,9 @@ const SavedPlaceScreen = () => {
                     `${t(TranslationKeys.delete_place)}`,
                     `${t(TranslationKeys.are_you_sure_you_want_to_delete_this_place)}`,
                     () => {
+                        if (selectedSavedLocation == item) {
+                            setSelectedSavedLocation(undefined)
+                        }
                         dispatch(removeSavePlace(item.id)).unwrap().then(res => {
                             const filterData = savePlaceListData.results.filter((res) => res.id !== item.id)
                             dispatch(filterSavePlacesReducer({

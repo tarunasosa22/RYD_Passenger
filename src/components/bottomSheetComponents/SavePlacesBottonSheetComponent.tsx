@@ -135,7 +135,8 @@ const useStyles = () => {
             fontSize: FontSizes.FONT_SIZE_12,
             color: colors.SECONDARY_TEXT,
             paddingVertical: wp(0),
-            paddingTop: wp(1)
+            paddingTop: wp(1),
+            flex: 1
         },
         listItemContainerStyle: {
             flex: 1,

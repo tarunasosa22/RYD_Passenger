@@ -135,8 +135,8 @@ const AUTH = "AUTH";
 export const getFcmToken = createAsyncThunk(AUTH + '/getFcmToken', async (_, { rejectWithValue }) => {
     try {
         await messaging().registerDeviceForRemoteMessages()
-        if (Platform.OS === 'android' && Platform.Version >= 33) {
-            await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATION)
+        if (Platform.OS === 'android') {
+            await PermissionsAndroid.request('android.permission.POST_NOTIFICATIONS')
         }
         const authStatus = await messaging().requestPermission();
         const enabled =
@@ -284,7 +284,7 @@ export const getCodesListApi = createAsyncThunk<string, null, { rejectValue: api
         }
     });
 
-export const commonCredentialsApi = createAsyncThunk<commonCredentialsDataProps, null, { rejectValue: apiErrorTypes }>(AUTH + "/commonCredentialsApi",
+    export const commonCredentialsApi = createAsyncThunk<commonCredentialsDataProps, null, { rejectValue: apiErrorTypes }>(AUTH + "/commonCredentialsApi",
     async (_, { rejectWithValue }) => {
         try {
             const response = await axiosClient.get(ApiConstants.COMMON_CREDENTIALS)
@@ -435,8 +435,8 @@ export const AuthSlice = createSlice({
             state.isLoading = false
         });
 
-        //Common credentials api
-        builder.addCase(commonCredentialsApi.pending, (state, action) => {
+         //Common credentials api
+         builder.addCase(commonCredentialsApi.pending, (state, action) => {
             state.isLoading = true
         });
         builder.addCase(commonCredentialsApi.fulfilled, (state, action) => {

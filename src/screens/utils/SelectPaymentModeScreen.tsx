@@ -39,7 +39,7 @@ const SelectPaymentModeScreen = () => {
     const { tokenDetail, userCordinates } = useAppSelector(state => state.AuthSlice);
     const focus = useIsFocused();
     // let ws: WebSocket
-    const ws = useRef(null); // Use `useRef` to keep the WebSocket instance persistent
+    const ws = useRef<WebSocket>(); // Use `useRef` to keep the WebSocket instance persistent
 
 
 

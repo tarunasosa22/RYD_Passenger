@@ -26,7 +26,7 @@ const navigationRef = createNavigationContainerRef();
 export const handleChooseImageFromGallery = (): Promise<Asset | undefined> => {
     const options: ImageLibraryOptions = {
         mediaType: 'photo',
-        includeBase64: true,
+        includeBase64: false,
     };
     return new Promise(((resolve, reject) => {
         launchImageLibrary(options, (response) => {
@@ -68,7 +68,7 @@ export const handleCapturePhotofromCamera = (): Promise<Asset | undefined> => {
 export const requestCameraPermission = async (t: any) => {
     try {
         const granted = await PermissionsAndroid.requestMultiple([
-            PermissionsAndroid.PERMISSIONS.CAMERA,
+            'android.permission.CAMERA',
         ])
         if (
             granted['android.permission.CAMERA'] === PermissionsAndroid.RESULTS.GRANTED
@@ -98,7 +98,7 @@ export const requestLocationPermission = async () => {
 
         } else {
             granted = await PermissionsAndroid.request(
-                PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+                'android.permission.ACCESS_FINE_LOCATION',
             ).then((value) => {
                 return value
             });
@@ -235,7 +235,7 @@ export const hasLocationPermission = async () => {
     }
 
     const status = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        'android.permission.ACCESS_FINE_LOCATION',
     );
 
     if (status === PermissionsAndroid.RESULTS.GRANTED) {

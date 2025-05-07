@@ -259,7 +259,7 @@ const OtpVerificationScreen = () => {
                             secureTextEntry
                             textInputProps={{
                                 accessibilityLabel: "sms-otp",
-                                returnKeyType: 'done',
+                                returnKeyType: 'default',
                                 keyboardType: 'number-pad'
                             }}
                             theme={{

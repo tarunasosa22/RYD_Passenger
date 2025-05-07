@@ -17,7 +17,7 @@ import CommonDraggableItem from './CommonDraggableItem';
 import CommonDraggableDashView from './CommonDraggableDashView';
 import CommonRideTwoTextView from './CommonRideTwoTextView';
 import useCustomNavigation from '../hooks/useCustomNavigation';
-import { RideBookingListDetailsTypes, RideLocationTypes, setRideDetailsData } from '../redux/slice/rideSlice/RideSlice';
+import { RideBookingListDetailsTypes, RideLocationTypes, setRideDetailsData, setnavigationDirection } from '../redux/slice/rideSlice/RideSlice';
 import moment from 'moment';
 import MapViewDirections from 'react-native-maps-directions';
 import { GOOGLE_MAP_API } from '../config/Host';
@@ -111,12 +111,16 @@ const CommonRideDetailsContainer = (props: CommonRideDetailsContainerProps) => {
         polyline: { "points": props?.data?.points }
     }])
 
+    const isDispute = (props.data?.rideStatus == RIDE_STATUS.ONGOING || props.data?.rideStatus == RIDE_STATUS.DRIVER_ENDED)
+
     return (
         <View style={[Styles.mainContainerStyle, Styles.mainContainerShadowStyle]}>
-            {(props.type == RIDE_TYPE.PREBOOKED && props.data?.rideStatus !== RIDE_STATUS.COMPLETED) &&
-                <TouchableOpacity style={{ padding: 5, alignSelf: 'flex-end' }} onPress={() => props?.onCancelPress()}>
-                    <Image source={Icons.DELETE_RIDE} style={Styles.deleteIcon} />
-                </TouchableOpacity>}
+            {/* {(props.type == RIDE_TYPE.PREBOOKED && (props.data?.rideStatus == RIDE_STATUS.CREATED || props.data?.rideStatus == RIDE_STATUS.PAYMENT_HOLD)) &&
+                <View style={{ flex: 1, justifyContent: 'space-between', flexDirection: 'row' }}>
+                    {((moment(props?.data?.preBookedTime).isBefore(moment())) && props.data?.rideStatus == RIDE_STATUS.PAYMENT_HOLD) ?
+                        <Text style={Styles.paymentRefundText} numberOfLines={2}>{t(TranslationKeys.get_back_ride_payment)}</Text> : <View></View>}
+                </View>
+            } */}
             <TouchableOpacity onPress={dropDown} activeOpacity={1} >
                 <CommonRideUserDetailView
                     userData={{
@@ -124,14 +128,24 @@ const CommonRideDetailsContainer = (props: CommonRideDetailsContainerProps) => {
                         driverCar: props.data?.driverCar,
                         priceModel: props.data?.priceModel,
                         rideCancelBy: props?.data?.rideCancelBy,
-                        deliveryDetails: props?.data?.deliveryDetails
+                        deliveryDetails: props?.data?.deliveryDetails,
+                        deleteUser: props?.data?.deletedUser,
+                        pickUpMode: props?.data?.pickupMode
                     }}
-                    isPreBook={(props.type == RIDE_TYPE.PREBOOKED && props.data?.rideStatus !== RIDE_STATUS.COMPLETED)}
+                    isHomeScreen={(props.data?.rideStatus == RIDE_STATUS.ONGOING || props.data?.rideStatus == RIDE_STATUS.DRIVER_ALLOCATED || props.data?.rideStatus == RIDE_STATUS.DRIVER_ENDED) ? true : false}
+                    isPreBook={(props.type == RIDE_TYPE.PREBOOKED && props.data?.rideStatus !== RIDE_STATUS.COMPLETED && props.data?.rideStatus !== RIDE_STATUS.CANCELLED)}
                 // cancelBy={props.data.cancelBy}
                 />
+                {props?.data?.deliveryDetails && (
+                    <View style={[GlobalStyle.rowContainer, { marginTop: wp(1) }]}>
+                        <Image source={Icons.GOODS_LOADING} style={{ width: wp(7), height: wp(7), resizeMode: 'contain', marginRight: wp(2) }} />
+                        <Text style={Styles.requestTxtStyle}>{props?.data?.deliveryDetails?.goodsType}</Text>
+                    </View>
+                )}
+                {(props.data?.rideStatus == RIDE_STATUS.COMPLETED || props.data?.rideStatus == RIDE_STATUS.CANCELLED || !props.data?.rideBookingOtp) ? null : <Text style={Styles.userNameTxtStyle}>{t(TranslationKeys.otp)} {props.data?.rideBookingOtp}</Text>}
                 <View style={Styles.commonItemSeprator} />
                 <View style={[GlobalStyle.rowContainer, Styles.spaceBetweenView]}>
-                    <CommonRideIconTextView icon={Icons.LOCATION_MARKER_BORDER} title={props.data?.distance + t(TranslationKeys.km)} adjustsFontSizeToFit />
+                    <CommonRideIconTextView icon={Icons.LOCATION_MARKER_BORDER} title={`${props.data?.distance} ${props.data?.distance > 1 ? t(TranslationKeys.km) : t(TranslationKeys.km)}`} adjustsFontSizeToFit />
                     <CommonRideIconTextView icon={Icons.CLOCK_BORDER} title={props.data?.estimatedTime + t(TranslationKeys.min)} adjustsFontSizeToFit />
                     <CommonRideIconTextView icon={Icons.WALLET} title={setPrice(t, props.data?.ridePayment?.totalFare, false, false)} adjustsFontSizeToFit />
                 </View>
@@ -166,7 +180,7 @@ const CommonRideDetailsContainer = (props: CommonRideDetailsContainerProps) => {
                                 </>
                             }
                         </TouchableOpacity>
-                        {props.type === RIDE_TYPE.YOURRIDES && (props.data?.rideStatus === RIDE_STATUS.DRIVER_ALLOCATED || props.data?.rideStatus === RIDE_STATUS.ONGOING || props.data?.rideStatus === RIDE_STATUS.CREATED) ?
+                        {props.type === RIDE_TYPE.YOURRIDES && (props.data?.rideStatus === RIDE_STATUS.DRIVER_ALLOCATED || props.data?.rideStatus === RIDE_STATUS.ONGOING || props.data?.rideStatus === RIDE_STATUS.DRIVER_ENDED || props.data?.rideStatus === RIDE_STATUS.CREATED) ?
                             <View>
                                 <View style={[Styles.mainMapContainerStyle, { height: hp(16) }]}>
                                     <CustomMapContainer
@@ -235,11 +249,90 @@ const CommonRideDetailsContainer = (props: CommonRideDetailsContainerProps) => {
                                         }
                                     }} title={props?.data?.rideStatus === RIDE_STATUS.CREATED ? AppStrings.find_driver : t(TranslationKeys.track_driver)} style={[GlobalStyle.primaryBtnStyle]} />
                                 <TouchableOpacity
-                                    disabled={props.data?.rideStatus !== RIDE_STATUS.DRIVER_ALLOCATED}
+                                    // disabled={props.data?.rideStatus !== RIDE_STATUS.DRIVER_ALLOCATED}
                                     onPress={() => {
-                                        props?.data?.id && navigation.navigate('CancelTaxiScreen', { id: props?.data?.id })
+                                        props?.data?.id && navigation.navigate('CancelTaxiScreen', { id: props?.data?.id, isDispute: isDispute })
                                     }} style={Styles.cancleRideBtnStyle}>
-                                    <Text style={[Styles.cancleRideTxtStyle, { color: props.data?.rideStatus === RIDE_STATUS.DRIVER_ALLOCATED ? colors.PRIMARY : colors.DISABLE_BUTTON }]}>{t(TranslationKeys.cancel_ride)}</Text>
+                                    <Text style={[Styles.cancleRideTxtStyle, { color: colors.PRIMARY }]}>{isDispute ? t(TranslationKeys.submit_for_dispute) : props?.data?.deliveryDetails ? t(TranslationKeys.cancel_delivery) : t(TranslationKeys.cancel_ride)}</Text>
+                                </TouchableOpacity>
+                            </View>
+                            :
+                            null
+                        }
+                        {props.type === RIDE_TYPE.PREBOOKED && (props.data?.rideStatus === RIDE_STATUS.DRIVER_ALLOCATED) ?
+                            <View>
+                                <View style={[Styles.mainMapContainerStyle, { height: hp(16) }]}>
+                                    <CustomMapContainer
+                                        showsCompass={false}
+                                        isLoaderShow={true}
+                                        region={{
+                                            latitude: props?.data?.rideLocation?.pickup?.latitude,
+                                            longitude: props?.data?.rideLocation?.pickup?.longitude,
+                                            latitudeDelta: 0.015,
+                                            longitudeDelta: 0.0121,
+                                        }}
+                                        minZoomLevel={15}
+                                        style={Styles.mapContainerStyle}>
+                                        <CustomUserMarkerView
+                                            iconStyle={{ tintColor: colors.GREEN_ICON }}
+                                            coordinate={{
+                                                latitude: props?.data?.rideLocation?.pickup?.latitude,
+                                                longitude: props?.data?.rideLocation?.pickup?.longitude,
+                                            }}
+                                        />
+                                        <CustomUserMarkerView
+                                            iconImage={Icons.DESTINATION_LOCATION_ICON}
+                                            iconStyle={{
+                                                tintColor: undefined,
+                                                width: wp(15),
+                                                height: wp(15),
+                                                resizeMode: 'contain'
+                                            }}
+                                            coordinate={{
+                                                latitude: props?.data?.rideLocation?.destination?.latitude,
+                                                longitude: props?.data?.rideLocation?.destination?.longitude,
+                                            }}
+                                        />
+                                        {(routeTrackList || coordinates) && <Polyline
+                                            coordinates={routeTrackList ?? coordinates}
+                                            strokeWidth={3}
+                                        />}
+                                        {/* {globalView} */}
+                                        {/* <MapViewDirections
+                                            apikey={GOOGLE_MAP_API}
+                                            origin={props?.data?.rideLocation?.pickup}
+                                            destination={props?.data?.rideLocation?.destination}
+                                            splitWaypoints
+                                            mode='DRIVING'
+                                            strokeWidth={3}
+                                            strokeColor={colors.PRIMARY_TEXT}
+                                            optimizeWaypoints={true}
+                                            onReady={() => {
+                                                let params = {
+                                                    api_name: "Google Directions API",
+                                                    ride_booking_id: props.data.id
+                                                }
+                                                dispatch(setApiCounter(params))
+                                            }}
+                                        /> */}
+                                    </CustomMapContainer>
+                                </View>
+                                <CustomPrimaryButton
+                                    onPress={() => {
+                                        if (props?.data?.rideStatus === RIDE_STATUS.CREATED) {
+                                            navigation.navigate("SearchingRiderScreen", {
+                                                id: props?.data?.id
+                                            })
+                                        } else {
+                                            props?.data?.id && navigation.navigate('TrackDriverScreen', { rideId: props?.data?.id })
+                                        }
+                                    }} title={props?.data?.rideStatus === RIDE_STATUS.CREATED ? AppStrings.find_driver : t(TranslationKeys.track_driver)} style={[GlobalStyle.primaryBtnStyle]} />
+                                <TouchableOpacity
+                                    // disabled={props.data?.rideStatus !== RIDE_STATUS.DRIVER_ALLOCATED}
+                                    onPress={() => {
+                                        props?.data?.id && navigation.navigate('CancelTaxiScreen', { id: props?.data?.id, isPreBook: true })
+                                    }} style={Styles.cancleRideBtnStyle}>
+                                    <Text style={[Styles.cancleRideTxtStyle, { color: colors.PRIMARY }]}>{props.data?.rideStatus !== RIDE_STATUS.DRIVER_ALLOCATED ? t(TranslationKeys.submit_for_dispute) : props?.data?.deliveryDetails ? t(TranslationKeys.cancel_delivery) : t(TranslationKeys.cancel_ride)}</Text>
                                 </TouchableOpacity>
                             </View>
                             :
@@ -289,10 +382,19 @@ const CommonRideDetailsContainer = (props: CommonRideDetailsContainerProps) => {
             {((props.type == RIDE_TYPE.YOURRIDES || props.type == RIDE_TYPE.PREBOOKED) && props.data?.rideStatus === RIDE_STATUS.COMPLETED) && (
                 <TouchableOpacity style={[Styles.cancleRideBtnStyle, { marginTop: wp(1) }]}
                     onPress={() => {
+                        dispatch(setnavigationDirection(true))
                         dispatch(setRideDetailsData(props?.data))
                         navigation.navigate('RideBillScreen', { from: 'YourRidesScreen' })
                     }}>
                     <Text style={Styles.cancleRideTxtStyle}>{props?.data?.deliveryDetails ? t(TranslationKeys.view_delivery_bill) : t(TranslationKeys.view_ride_bill)}</Text>
+                </TouchableOpacity>
+            )}
+            {((props.type == RIDE_TYPE.PREBOOKED) && (props.data?.rideStatus === RIDE_STATUS.CREATED || props.data?.rideStatus === RIDE_STATUS.PAYMENT_HOLD)) && (
+                <TouchableOpacity style={[Styles.cancleRideBtnStyle, { marginTop: wp(1) }]}
+                    onPress={() => {
+                        props.data.id && navigation.navigate('CancelTaxiScreen', { id: props.data.id, isPreBook: true })
+                    }}>
+                    <Text style={Styles.cancleRideTxtStyle}>{props?.data?.deliveryDetails ? t(TranslationKeys.cancel_delivery) : t(TranslationKeys.cancel_ride)}</Text>
                 </TouchableOpacity>
             )}
             <CustomIconButton onPress={dropDown} icon={props?.expandMore === props?.data?.id ? Icons.UPARROW : Icons.DROPDOWN}
@@ -313,7 +415,7 @@ const useStyles = () => {
         commonItemSeprator: {
             backgroundColor: colors.SEPARATOR_LINE,
             height: wp(0.5),
-            marginVertical: wp(3.5),
+            marginVertical: wp(2.5),
             borderRadius: wp(2)
         },
         mainContainerStyle: {
@@ -391,12 +493,32 @@ const useStyles = () => {
             marginTop: wp(2)
         },
         deleteIcon: {
-            width: wp(5),
-            height: wp(5),
+            width: wp(6),
+            height: wp(6),
             resizeMode: 'contain',
             alignSelf: 'flex-end',
-            marginTop: -5,
             tintColor: colors.ERROR_TEXT
-        }
+        },
+        requestTxtStyle: {
+            color: colors.SECONDARY_TEXT,
+            fontSize: FontSizes.FONT_SIZE_14,
+            fontFamily: Fonts.FONT_POP_MEDIUM,
+            // maxWidth: wp(45),
+        },
+        paymentRefundText: {
+            fontFamily: Fonts.FONT_POP_REGULAR,
+            fontSize: FontSizes.FONT_SIZE_14,
+            color: colors.ERROR_TEXT,
+            width: '80%',
+            marginBottom: wp(2)
+        },
+        userNameTxtStyle: {
+            fontFamily: Fonts.FONT_POP_MEDIUM,
+            fontSize: FontSizes.FONT_SIZE_16,
+            color: colors.PRIMARY_TEXT,
+            textAlign: 'left',
+            marginTop: wp(1),
+            marginBottom: wp(-1)
+        },
     });
 };

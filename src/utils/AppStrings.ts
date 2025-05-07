@@ -86,6 +86,22 @@ export const AppStrings = {
         waiting_time_is_too_long: "Waiting time is too long",
         taking_too_long_time_to_find_cab: "Taking too long to find the cab"
     },
+    pre_cancellations_reason: {
+        not_confident_about_ride: "Didn't feel confident about the ride",
+        no_need_ride: "No longer need this ride",
+        different_ride: "Taking a different ride on RYD Now",
+        no_diver_assigned: "No driver assigned",
+        my_reason_is_not_listed: "My reason is not listed",
+    },
+    disputed_reason: {
+        driver_took_longer_route:"Driver Took a Longer Route Intentionally",
+        driver_was_rude:"Driver Was Rude or Unprofessional",
+        driver_ask_extra_payment:"Driver Asked for Extra Payment",
+        driver_made_stop:"Driver Made an Unwanted Stop",
+        driver_under_alcohol:"Driver Under the Influence of Alcohol or Drugs",
+        driver_brought_people:"Driver Brought Additional People in Vehicle",
+        please_specify_other:"Other (Please Specify)"
+    },
     other: "Other",
     enter_your_reason: "Enter your Reason",
     cancel_ride: "Cancel Ride",

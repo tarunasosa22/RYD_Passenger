@@ -18,7 +18,7 @@
 export const APP_URL = 'https://api.rydtaxi.app'; //stagging
 export const CHAT_WEB_SOCKET = `wss://api.rydtaxi.app/ws/chat/room/`;//stagging
 export const RIDE_DETAILS = `wss://api.rydtaxi.app/ws/ride/booking/`;//stagging
-export const WITH_DRAWALS = `ws://api.rydtaxi.app/ws/riders/rider-details/`;
+export const WITH_DRAWALS = `wss://api.rydtaxi.app/ws/riders/rider-details/`;
 export const SOS_URL = "https://admin.rydtaxi.app" //staging
 export const PHONE_PE_CALLBACK_URL = "https://api.rydtaxi.app/riders/payment-callback/";
 

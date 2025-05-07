@@ -15,7 +15,7 @@ import * as yup from 'yup';
 import useCustomNavigation from '../../hooks/useCustomNavigation';
 import { useGlobalStyles } from '../../hooks/useGlobalStyles';
 import { store, useAppDispatch, useAppSelector } from '../../redux/Store';
-import { getAsyncStorageData, setAsyncStorageData } from '../../utils/HelperFunctions';
+import { getAsyncStorageData, hasLocationPermission, setAsyncStorageData } from '../../utils/HelperFunctions';
 import DeviceInfo from 'react-native-device-info';
 import { getFcmToken, sendOtp, setCountryCode } from '../../redux/slice/authSlice/AuthSlice';
 import CustomActivityIndicator from '../../components/CustomActivityIndicator';
@@ -116,6 +116,7 @@ const SendOtpScreen = () => {
     useEffect(() => {
         messaging().deleteToken()
         dispatch(getFcmToken()).then((res) => {
+            hasLocationPermission()
             console.log(res);
         }).catch((error) => {
             console.log(error);
@@ -126,9 +127,9 @@ const SendOtpScreen = () => {
         try {
             dispatch(setCountryCode(selectCountry))
             dispatch(sendOtp(params)).unwrap().then(async (res) => {
-                // if (Platform.OS === 'ios') {
-                //     PushNotificationIOS.setApplicationIconBadgeNumber(0)
-                // }
+                if (Platform.OS === 'ios') {
+                    // PushNotificationIOS.setApplicationIconBadgeNumber(0)
+                }
                 //! Don't remove this 'sendOtp' function as this is critical API for creating user first before sending/verifying OTP.
 
                 const confirmation = await auth().signInWithPhoneNumber("+" + selectCountry + values.phoneNumber);
@@ -242,7 +243,7 @@ const SendOtpScreen = () => {
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
                 keyboardVerticalOffset={Platform.OS === "ios" ? 0 : StatusBar.currentHeight}
-                behavior={Platform.OS === "ios" ? "padding" : "height"}>
+                behavior={Platform.OS === "ios" ? "padding" : "padding"}>
                 <ScrollView keyboardShouldPersistTaps={'handled'} bounces={false} contentContainerStyle={{ flex: 1 }}>
                     <CustomContainer>
                         <Text style={Styles.enterNumberTxtStyle}>{t(TranslationKeys.enter_phone_number)}</Text>

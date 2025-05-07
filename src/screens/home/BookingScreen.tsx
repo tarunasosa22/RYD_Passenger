@@ -32,10 +32,10 @@ import ContactListView from '../../components/ContactListView';
 import CommonDropDownComponent from '../../components/CommonDropDownComponent';
 import CustomActivityIndicator from '../../components/CustomActivityIndicator';
 import FastImage from 'react-native-fast-image';
-import { PICK_UP_MODE } from '../../utils/Constats';
+import { PICK_UP_MODE, RIDE_STATUS } from '../../utils/Constats';
 import { AppAlert } from '../../utils/AppAlerts';
 import { ContactsDetailsRegExp } from '../../utils/ScreenUtils';
-import { applyDiscountCoupons, deleteRideBooking, discountCoupans, enableSecureMode, getDiscountListApi, makeRidePayment, setDeliveryDetails, setRideBookingData } from '../../redux/slice/rideSlice/RideSlice';
+import { applyDiscountCoupons, cancelRide, deleteRideBooking, discountCoupans, enableSecureMode, getDiscountListApi, makeRidePayment, riderActiveRide, setDeliveryDetails, setRideBookingData } from '../../redux/slice/rideSlice/RideSlice';
 import CustomModelAlert from '../../components/CustomAlertModal';
 import CustomIconButton from '../../components/CustomIconButton';
 import CustomDiscountCouponComponent from '../../components/CustomDiscountCouponComponent';
@@ -46,7 +46,7 @@ import analytics from '@react-native-firebase/analytics';
 import { TranslationKeys } from '../../localization/TranslationKeys';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../../context/LanguageContext';
-import { RouteProp, useRoute } from '@react-navigation/native';
+import { RouteProp, useIsFocused, useRoute } from '@react-navigation/native';
 import { RootStackParamList } from '../../types/RootStackType';
 import CustomDeliveryBooking from '../../components/CustomDeliveryBooking';
 import { paymentBeforeAfter } from '../../redux/slice/paymentSlice/PaymentSlice';
@@ -79,18 +79,20 @@ const BookingScreen = () => {
     const navigation = useCustomNavigation("BookingScreen");
     const Styles = useStyles();
     const GlobalStyle = useGlobalStyles();
+    const focus = useIsFocused();
     type NestedScreenRouteProp = RouteProp<RootStackParamList, 'BookingScreen'>;
     const route = useRoute<NestedScreenRouteProp>();
     const isDeliveryModule = route?.params?.isDeliveryModule ?? false
     const { colors } = useAppSelector(state => state.CommonSlice);
     const { userDetail, userCordinates, tokenDetail } = useAppSelector(state => state.AuthSlice)
-    const { paymentMethod, bookingDestinations, isLoading, rideQuotationList, rideQuotationError, globalLang, routeTrackList, appliedCoupon } = useAppSelector(state => state.HomeSlice);
+    const { paymentMethod, bookingDestinations, lastActiveTime, createRideData, createDeliveryRideData, isComplateTimer,
+        isLoading, rideQuotationList, rideQuotationError, globalLang, routeTrackList, appliedCoupon } = useAppSelector(state => state.HomeSlice);
     const { isLoading: enableSecureModeLoader, discountCouponList, rideBookingData, rideDetails, deliveryDetails } = useAppSelector(state => state.RideSlice)
     const bottomSheetRef = useRef<BottomSheet>(null);
     const [contacts, setContacts] = useState<ContactsProps[] | []>([]);
     const [selectedCarType, setSelectedCarType] = useState<QuotationListTypes | undefined>(undefined);
     const [selectedTempCarType, setSelectedTempCarType] = useState<QuotationListTypes>();
-    const [bottomSheetHeight, setBottomSheetHeight] = useState<string[]>(isDeliveryModule ? ["30%", "70%"] : ["30%", "80%"]);
+    const [bottomSheetHeight, setBottomSheetHeight] = useState<string[]>(isDeliveryModule ? ["30%", "90%"] : ["30%", "90%"]);
     const [showContactBottomSheet, setShowContactBottomSheet] = useState<boolean>(false);
     const [showdatePickerSheet, setShowdatePickerSheet] = useState<boolean>(false);
     const [date, setDate] = useState(new Date(new Date().getTime() + 30 * 60 * 1000));
@@ -118,6 +120,7 @@ const BookingScreen = () => {
     const [currentPricingModal, setCurrentPricingModal] = useState(0);
     const [disocuntCode, setDisocuntCode] = useState<string>('');
     const { t } = useTranslation();
+    const [disabled, setDisabled] = useState(false)
     const [sheetIndex, setSheetIndex] = useState(0);
     const [isPickUpMode, setisPickUpMode] = useState<{ visible: boolean, message: string }>({ message: "", visible: false });
     const { locale } = useLanguage()
@@ -211,6 +214,13 @@ const BookingScreen = () => {
         })
     }, [originLocation])
 
+    useEffect(() => {
+        if (focus) {
+            riderActiveRideDetailApiCall()
+        }
+    }, [focus])
+
+
     //** Handle Pickup Mode */
     useEffect(() => {
         if (pickupMode == "NOW") {
@@ -218,7 +228,7 @@ const BookingScreen = () => {
         } else {
             setShowdatePickerSheet(true)
             setDate(new Date(new Date().getTime() + 30 * 60 * 1000))
-            setBottomSheetHeight(["40%"])
+            setBottomSheetHeight(["50%"])
             bottomSheetRef?.current?.snapToIndex(0)
         }
     }, [pickupMode])
@@ -248,6 +258,48 @@ const BookingScreen = () => {
             return permission === 'authorized';
         }
     };
+
+    const riderActiveRideDetailApiCall = () => {
+        dispatch(riderActiveRide(null)).unwrap()
+            .then((res) => {
+                if ((store.getState().PaymentSlice.isPaymentBeforeAfter?.takePaymentBeforeRide && res?.rideStatus == RIDE_STATUS.CREATED && res?.ridePayment?.paymentMethod == 'CARD')) {
+                    dispatch(deleteRideBooking(res?.id))
+                    dispatch(setAppliedCoupon(-1))
+                } else {
+                    let backgroundDate = moment(lastActiveTime)
+                    const timeSpent = moment().diff(backgroundDate, 'seconds')
+                    console.log("timeSpent--->", backgroundDate, timeSpent)
+                    if ((res?.rideStatus == RIDE_STATUS.PAYMENT_HOLD || res?.rideStatus == RIDE_STATUS.CREATED) && (res?.ridePayment?.paymentMethod == 'CARD' || res?.ridePayment?.paymentMethod == 'CASH')) {
+                        if (timeSpent < 185 || (isComplateTimer && (createRideData?.id == res.id))) {
+                            navigation.navigate('SearchingRiderScreen', {
+                                id: createRideData?.id,
+                                from: "HomeScreen",
+                                isAppCloseOrOpen: true,
+                                isDeliveryModule: createDeliveryRideData ? true : false
+                            })
+                        } else {
+                            const data = new FormData()
+                            data.append("ride_booking", res?.id)
+                            let params = {
+                                formData: data,
+                            }
+                            if (res?.ridePayment?.paymentMethod == 'CASH') {
+                                dispatch(setPaymentMethod("Card"))
+                                dispatch(deleteRideBooking(res?.id))
+                            } else {
+                                dispatch(cancelRide(params))
+                            }
+                        }
+                    }
+                    else {
+                        dispatch(setAppliedCoupon(-1))
+                    }
+                }
+            })
+            .catch((error) => {
+                console.log("🚀  file: HomeScreen.tsx:75  useEffect ~ error:", error)
+            })
+    }
 
     const requestPermission = async () => {
         const permission = await Contacts.requestPermission();
@@ -294,22 +346,22 @@ const BookingScreen = () => {
             destination_locations: JSON.stringify(destinationLocation),
             is_secured: isEnablesecureMode == "off" ? true : false,
 
-            is_time_and_distance_exists: rideQuotationList.data.distance != null,
-            distance: rideQuotationList.data.distance,
-            duration: rideQuotationList.data.duration,
-            pickup: rideQuotationList.data.address?.pickup,
-            destination: rideQuotationList.data.address.destination,
-            pickupState: rideQuotationList.data.pickupState,
-            cgst: rideQuotationList.data.cgst,
-            sgst: rideQuotationList.data.sgst,
-            destinationState: rideQuotationList.data.destinationState,
-            toll: rideQuotationList.data.toll,
-            points: rideQuotationList.data.points
+            is_time_and_distance_exists: rideQuotationList?.data?.distance != null,
+            distance: rideQuotationList?.data?.distance,
+            duration: rideQuotationList?.data?.duration,
+            pickup: rideQuotationList?.data?.address?.pickup,
+            destination: rideQuotationList?.data?.address?.destination,
+            pickupState: rideQuotationList?.data?.pickupState,
+            cgst: rideQuotationList?.data?.cgst,
+            sgst: rideQuotationList?.data?.sgst,
+            destinationState: rideQuotationList?.data?.destinationState,
+            toll: rideQuotationList?.data?.toll,
+            points: rideQuotationList?.data?.points
         }
-        if (rideQuotationList.data.address.stops.length !== 0) {
+        if (rideQuotationList?.data?.address?.stops?.length !== 0) {
             params = {
                 ...params,
-                stops: JSON.stringify(rideQuotationList.data.address.stops)
+                stops: JSON.stringify(rideQuotationList?.data?.address?.stops)
             }
         }
         if (disocuntCode !== "") {
@@ -439,22 +491,22 @@ const BookingScreen = () => {
             // is_coupon_apply: true,
             // discount_code: coupanCode,
             is_secured: isEnablesecureMode == "on" ? true : false,
-            is_time_and_distance_exists: rideQuotationList.data.distance != null,
-            distance: rideQuotationList.data.distance,
-            duration: rideQuotationList.data.duration,
-            pickup: rideQuotationList.data.address?.pickup,
-            destination: rideQuotationList.data.address?.destination,
-            pickupState: rideQuotationList.data.pickupState,
-            cgst: rideQuotationList.data.cgst,
-            sgst: rideQuotationList.data.sgst,
-            destinationState: rideQuotationList.data.destinationState,
-            toll: rideQuotationList.data.toll,
-            points: rideQuotationList.data.points
+            is_time_and_distance_exists: rideQuotationList?.data?.distance != null,
+            distance: rideQuotationList?.data?.distance,
+            duration: rideQuotationList?.data?.duration,
+            pickup: rideQuotationList?.data?.address?.pickup,
+            destination: rideQuotationList?.data?.address?.destination,
+            pickupState: rideQuotationList?.data?.pickupState,
+            cgst: rideQuotationList?.data?.cgst,
+            sgst: rideQuotationList?.data?.sgst,
+            destinationState: rideQuotationList?.data?.destinationState,
+            toll: rideQuotationList?.data?.toll,
+            points: rideQuotationList?.data?.points
         }
-        if (rideQuotationList.data.address?.stops.length !== 0) {
+        if (rideQuotationList?.data?.address?.stops.length !== 0) {
             params = {
                 ...params,
-                stops: JSON.stringify(rideQuotationList.data.address?.stops)
+                stops: JSON.stringify(rideQuotationList?.data?.address?.stops)
             }
         }
 
@@ -467,7 +519,7 @@ const BookingScreen = () => {
         }
         dispatch(getRideQuotationList(params)).unwrap().then((res) => {
             setPricingModal(res.result)
-            if (selectedTempCarType && res.result.length !== 0) {
+            if (selectedTempCarType && res?.result?.length !== 0) {
                 let findIndex = res.result.findIndex(item => item?.id == selectedTempCarType.id)
                 selectCarType(findIndex)
                 if (selectedCarType) {
@@ -517,7 +569,6 @@ const BookingScreen = () => {
     }
 
     const selectCarType = (selectedIndex: number) => {
-        console.log("DAATTA--->", store.getState().HomeSlice?.rideQuotationList?.result.length, store.getState().HomeSlice?.rideQuotationList?.result?.find((item, index) => index == selectedIndex))
         if (store.getState().HomeSlice?.rideQuotationList?.result.length !== 0) {
             setSelectedTempCarType(store.getState().HomeSlice?.rideQuotationList?.result?.find((item, index) => index == selectedIndex))
         }
@@ -525,8 +576,9 @@ const BookingScreen = () => {
 
     const closeDatePickerBottomSheet = (type: string) => {
         setSelectedDate(moment(type == "close" ? new Date : date).format("YYYY-MM-DDTHH:mm:ss"))
-        setBottomSheetHeight(["30%", "80%"])
-        bottomSheetRef.current?.snapToIndex(0)
+        setBottomSheetHeight(["30%", "85%"])
+        bottomSheetRef.current?.snapToPosition("85%", { duration: 700 });
+        setSheetIndex(1)
         setShowdatePickerSheet(false)
     };
 
@@ -582,23 +634,23 @@ const BookingScreen = () => {
         }
 
         // Estimated time and distance
-        if (rideQuotationList.data.duration !== null) {
-            params.estimatedTime = rideQuotationList.data.duration;
+        if (rideQuotationList?.data.duration !== null) {
+            params.estimatedTime = rideQuotationList?.data.duration;
         }
-        params.distance = rideQuotationList.data.distance;
-        params.points = rideQuotationList.data.points;
+        params.distance = rideQuotationList?.data.distance;
+        params.points = rideQuotationList?.data.points;
 
         // Pickup and destination addresses
-        params.pickup = rideQuotationList.data.address.pickup;
-        params.destination = rideQuotationList.data.address.destination;
-        params.pickupState = rideQuotationList.data.pickupState,
-            params.cgst = rideQuotationList.data.cgst,
-            params.sgst = rideQuotationList.data.sgst,
-            params.destinationState = rideQuotationList.data.destinationState,
-            params.toll = rideQuotationList.data.toll
+        params.pickup = rideQuotationList?.data.address.pickup;
+        params.destination = rideQuotationList?.data?.address?.destination;
+        params.pickupState = rideQuotationList?.data.pickupState,
+            params.cgst = rideQuotationList?.data.cgst,
+            params.sgst = rideQuotationList?.data.sgst,
+            params.destinationState = rideQuotationList?.data.destinationState,
+            params.toll = rideQuotationList?.data.toll
         // Stops in ride quotation
-        if (rideQuotationList.data.address.stops.length !== 0) {
-            params.stops = JSON.stringify(rideQuotationList.data.address.stops);
+        if (rideQuotationList?.data.address.stops.length !== 0) {
+            params.stops = JSON.stringify(rideQuotationList?.data.address.stops);
         }
         if (deliveryDetails) {
             params.senderFullName = deliveryDetails?.senderFullName;
@@ -611,87 +663,160 @@ const BookingScreen = () => {
             params.goodsPackage = deliveryDetails.goodsPackage;
             params.goodsWeight = deliveryDetails.goodsWeight;
         }
-        dispatch(createRide(params)).unwrap().then((res) => {
-            dispatch(setLastActibeStep(0))
-            dispatch(setIsComplateTimer(false))
-            analytics().logEvent(ANALYTICS_ID.RIDE_BOOKING_SUCCESSFULLY, {
-                'userDetails': {
-                    'id': userDetail?.id,
-                    'name': userDetail?.name,
-                    'phoneNumber': userDetail?.phoneNumber
-                }
-            })
-            if (res.pickupMode === PICK_UP_MODE.NOW) {
-                if (res?.ridePayment?.paymentMethod === "CARD" && store.getState().PaymentSlice?.isPaymentBeforeAfter?.takePaymentBeforeRide) {
-                    const data = new FormData()
-                    data.append("payment_type", res?.ridePayment?.paymentMethod)
-                    data.append("total_amount", res?.ridePayment?.totalFare)
-                    const rideParams = {
-                        rideId: res?.id,
-                        formData: data
+        const paramss = {
+            paymentType: "razorpay"
+        }
+        setDisabled(true)
+        dispatch(paymentBeforeAfter(paramss)).unwrap().then((BeforeRidRes) => {
+            dispatch(createRide(params)).unwrap().then((res) => {
+                dispatch(setLastActibeStep(0))
+                dispatch(setIsComplateTimer(false))
+                analytics().logEvent(ANALYTICS_ID.RIDE_BOOKING_SUCCESSFULLY, {
+                    'userDetails': {
+                        'id': userDetail?.id,
+                        'name': userDetail?.name,
+                        'phoneNumber': userDetail?.phoneNumber
                     }
-                    dispatch(makeRidePayment(rideParams)).unwrap()
-                        .then(response => {
-                            var options = {
-                                description: 'RYD Now',
-                                image: tokenDetail?.userData?.profilePic ?? ImagesPaths.EMPTY_IMAGE,
-                                currency: 'INR',
-                                key: store.getState().AuthSlice.commonCredentialsData?.keyId,
-                                // callback_url: 'https://www.figma.com/file/9X2YMvbPn5jaOuTcFwD1cx/Taxi-booking-Mobille-App-Driver-%26-Passenger-%26-Admin-(Copy)?type=design&node-id=2923-30541&t=PMTCn4rno94UCJHP-0',
-                                redirect: true,
-                                amount: res?.totalFare * 100,
-                                name: tokenDetail?.userData?.name,
-                                order_id: response?.razorpayResponse?.orderId,//Replace this with an order_id created using Orders API.
-                                prefill: {
-                                    // email: tokenDetail?.userData?.email,
-                                    contact: tokenDetail?.userData?.phoneNumber,
-                                    // name: 'testing'
-                                },
-                                theme: { color: colors.PRIMARY },
-                                method: {
-                                    // credit: false, // Disable Pay Later option
-                                    netbanking: true,
-                                    card: true,
-                                    upi: true,
-                                    wallet: true,
-                                    paylater: false
+                })
+                if (res.pickupMode === PICK_UP_MODE.NOW) {
+                    if (res?.ridePayment?.paymentMethod === "CARD" && BeforeRidRes?.takePaymentBeforeRide) {
+                        const data = new FormData()
+                        data.append("payment_type", res?.ridePayment?.paymentMethod)
+                        data.append("total_amount", res?.ridePayment?.totalFare)
+                        const rideParams = {
+                            rideId: res?.id,
+                            formData: data
+                        }
+                        dispatch(makeRidePayment(rideParams)).unwrap()
+                            .then(response => {
+                                var options = {
+                                    description: 'RYD Now',
+                                    image: tokenDetail?.userData?.profilePic ?? ImagesPaths.EMPTY_IMAGE,
+                                    currency: 'INR',
+                                    key: store.getState().AuthSlice.commonCredentialsData?.keyId,
+                                    // callback_url: 'https://www.figma.com/file/9X2YMvbPn5jaOuTcFwD1cx/Taxi-booking-Mobille-App-Driver-%26-Passenger-%26-Admin-(Copy)?type=design&node-id=2923-30541&t=PMTCn4rno94UCJHP-0',
+                                    redirect: true,
+                                    amount: res?.totalFare * 100,
+                                    name: tokenDetail?.userData?.name,
+                                    order_id: response?.razorpayResponse?.orderId,//Replace this with an order_id created using Orders API.
+                                    prefill: {
+                                        // email: tokenDetail?.userData?.email,
+                                        contact: tokenDetail?.userData?.phoneNumber,
+                                        // name: 'testing'
+                                    },
+                                    theme: { color: colors.PRIMARY },
+                                    method: {
+                                        // credit: false, // Disable Pay Later option
+                                        netbanking: true,
+                                        card: true,
+                                        upi: true,
+                                        wallet: true,
+                                        paylater: false
+                                    }
                                 }
-                            }
-                            RazorpayCheckout.open(options as any).then((data: { razorpay_payment_id: any; }) => {
-                                console.log("🚀  file: SelectPaymentModeScreen.tsx:163  RazorpayCheckout.open ~ data:", data)
-                                navigation.navigate("SearchingRiderScreen", { id: res?.id, from: 'BookingScreen' })
+                                RazorpayCheckout.open(options as any).then((data: { razorpay_payment_id: any; }) => {
+                                    console.log("🚀  file: SelectPaymentModeScreen.tsx:163  RazorpayCheckout.open ~ data:", data)
+                                    navigation.navigate("SearchingRiderScreen", { id: res?.id, from: 'BookingScreen' })
+                                    setDisabled(false)
 
-                            }).catch((error: { code: any; description: any; }) => {
-                                // handle failure
-                                if (error.code == 0) {
-                                    AppAlert(t(TranslationKeys.Message), 'Cancelled by user')
-                                } else {
-                                    Alert.alert(`${t(TranslationKeys.error)} ${error.code} \n ${error.description}`);
-                                };
+                                }).catch((error: { code: any; description: any; }) => {
+                                    setDisabled(false)
+                                    // handle failure
+                                    if (error.code == 0) {
+                                        AppAlert(t(TranslationKeys.Message), 'Cancelled by user')
+                                    } else {
+                                        Alert.alert(`${t(TranslationKeys.error)} ${error.code} \n ${error.description}`);
+                                    };
+                                    dispatch(deleteRideBooking(res?.id)).unwrap().then(res => {
+                                        dispatch(setCreateRideData(null))
+                                    }).catch(e => console.log({ e }))
+                                });
+                            }).catch((e: any) => {
+                                console.log({ e })
                                 dispatch(deleteRideBooking(res?.id)).unwrap().then(res => {
                                     dispatch(setCreateRideData(null))
                                 }).catch(e => console.log({ e }))
-                            });
-                        }).catch((e: any) => {
-                            console.log({ e })
-                            dispatch(deleteRideBooking(res?.id)).unwrap().then(res => {
-                                dispatch(setCreateRideData(null))
-                            }).catch(e => console.log({ e }))
-                        })
-                } else {
-                    navigation.navigate("SearchingRiderScreen", { id: res?.id, from: "BookingScreen" })
+                            })
+                    } else {
+                        setDisabled(false)
+                        navigation.navigate("SearchingRiderScreen", { id: res?.id, from: "BookingScreen" })
+                    }
+                } else if (res.pickupMode === PICK_UP_MODE.LATER) {
+                    if (res?.ridePayment?.paymentMethod === "CARD" && BeforeRidRes?.takePaymentBeforeRide) {
+                        const data = new FormData()
+                        data.append("payment_type", res?.ridePayment?.paymentMethod)
+                        data.append("total_amount", res?.ridePayment?.totalFare)
+                        const rideParams = {
+                            rideId: res?.id,
+                            formData: data
+                        }
+                        dispatch(makeRidePayment(rideParams)).unwrap()
+                            .then(response => {
+                                var options = {
+                                    description: 'RYD Now',
+                                    image: tokenDetail?.userData?.profilePic ?? ImagesPaths.EMPTY_IMAGE,
+                                    currency: 'INR',
+                                    key: store.getState().AuthSlice.commonCredentialsData?.keyId,
+                                    // callback_url: 'https://www.figma.com/file/9X2YMvbPn5jaOuTcFwD1cx/Taxi-booking-Mobille-App-Driver-%26-Passenger-%26-Admin-(Copy)?type=design&node-id=2923-30541&t=PMTCn4rno94UCJHP-0',
+                                    redirect: true,
+                                    amount: res?.totalFare * 100,
+                                    name: tokenDetail?.userData?.name,
+                                    order_id: response?.razorpayResponse?.orderId,//Replace this with an order_id created using Orders API.
+                                    prefill: {
+                                        // email: tokenDetail?.userData?.email,
+                                        contact: tokenDetail?.userData?.phoneNumber,
+                                        // name: 'testing'
+                                    },
+                                    theme: { color: colors.PRIMARY },
+                                    method: {
+                                        // credit: false, // Disable Pay Later option
+                                        netbanking: true,
+                                        card: true,
+                                        upi: true,
+                                        wallet: true,
+                                        paylater: false
+                                    }
+                                }
+                                RazorpayCheckout.open(options as any).then((data: { razorpay_payment_id: any; }) => {
+                                    console.log("🚀  file: SelectPaymentModeScreen.tsx:163  RazorpayCheckout.open ~ data:", data)
+                                    // navigation.navigate("SearchingRiderScreen", { id: res?.id, from: 'BookingScreen' })
+                                    setDisabled(false)
+                                    setShowPrebookSuccessPopup(true)
+                                }).catch((error: { code: any; description: any; }) => {
+                                    setDisabled(false)
+                                    // handle failure
+                                    if (error.code == 0) {
+                                        AppAlert(t(TranslationKeys.Message), 'Cancelled by user')
+                                    } else {
+                                        Alert.alert(`${t(TranslationKeys.error)} ${error.code} \n ${error.description}`);
+                                    };
+                                    dispatch(deleteRideBooking(res?.id)).unwrap().then(res => {
+                                        dispatch(setCreateRideData(null))
+                                    }).catch(e => console.log({ e }))
+                                });
+                            }).catch((e: any) => {
+                                console.log({ e })
+                                dispatch(deleteRideBooking(res?.id)).unwrap().then(res => {
+                                    dispatch(setCreateRideData(null))
+                                }).catch(e => console.log({ e }))
+                            })
+                    } else {
+                        setDisabled(false)
+                        setShowPrebookSuccessPopup(true)
+                    }
+                    setDisabled(false)
+                    dispatch(setPaymentMethod("Card"))
+                    dispatch(setRideBookingData(res))
                 }
-            } else if (res.pickupMode === PICK_UP_MODE.LATER) {
-                setShowPrebookSuccessPopup(true)
-                dispatch(setPaymentMethod("Card"))
-                dispatch(setRideBookingData(res))
-            }
-            else {
-                dispatch(resetRideQuotationList())
-                dispatch(setBookingDestinations([]))
-            }
-        }).catch((error) => {
-            console.log("ERROR", error);
+                else {
+                    setDisabled(false)
+                    dispatch(resetRideQuotationList())
+                    dispatch(setBookingDestinations([]))
+                }
+            }).catch((error) => {
+                setDisabled(false)
+                console.log("ERROR", error);
+            })
         })
     };
 
@@ -699,7 +824,7 @@ const BookingScreen = () => {
     const renderFooter = useCallback(
         (props: React.JSX.IntrinsicAttributes & BottomSheetDefaultFooterProps) => {
             console.log("PROPSSSS--->", props)
-            if (sheetIndex === 0 && !showdatePickerSheet) return null;
+            if (!showContactBottomSheet && sheetIndex === 0 && !showdatePickerSheet) return null;
             return (
                 <BottomSheetFooter {...props} bottomInset={0}>
                     {
@@ -716,11 +841,13 @@ const BookingScreen = () => {
                                         closeDatePickerBottomSheet("cancel")
                                         setPickupMode("NOW")
                                         // if (Platform.OS == 'android') {
-                                        bottomSheetRef.current?.snapToPosition("80%", {
+                                        bottomSheetRef.current?.snapToPosition("98%", {
                                             duration: 600
                                         })
+                                        // bottomSheetRef.current?.expand({ duration: 600 })
+                                        setSheetIndex(1)
                                         // } else {
-                                        //     setBottomSheetHeight(["30%", "80%"])
+                                        //     setBottomSheetHeight(["30%", "85%"])
                                         // }
                                     }}
                                     title={t(TranslationKeys.cancel)} />
@@ -729,23 +856,27 @@ const BookingScreen = () => {
                                     onPress={() => {
                                         closeDatePickerBottomSheet("confirm")
                                         // if (Platform.OS == 'android') {
-                                        bottomSheetRef.current?.snapToPosition("80%", {
+                                        bottomSheetRef.current?.snapToPosition("98%", {
                                             duration: 600
                                         })
+                                        // bottomSheetRef.current?.expand({ duration: 600 })
+                                        setSheetIndex(1)
+                                        // bottomSheetRef.current?.expand()
                                         // } else {
-                                        //     setBottomSheetHeight(["30%", "80%"])
+                                        //     setBottomSheetHeight(["30%", "85%"])
                                         // }
                                     }}
                                     title={t(TranslationKeys.confirm)} />
                             </View>
                             :
                             <CustomBottomBtn
+                                // containerStyle={{ paddingVertical: wp(2), }}
                                 disabled={rideQuotationError}
                                 style={{ backgroundColor: !rideQuotationError ? colors.PRIMARY : colors.SECONDARY_LIGHT_ICON }}
                                 onPress={() => {
                                     if (showContactBottomSheet) {
                                         selectedTempContact && setSelectedContact(selectedTempContact)
-                                        setBottomSheetHeight(["30%", "80%"])
+                                        setBottomSheetHeight(["30%", "85%"])
                                         // bottomSheetRef.current?.snapToPosition("70%", {
                                         //     duration: 600
                                         // })
@@ -773,7 +904,7 @@ const BookingScreen = () => {
                                                     navigation.navigate('DeliveyReviewScreen')
                                                 } else {
                                                     setSelectedDate(moment(date).format("YYYY-MM-DDTHH:mm:ss"))
-                                                    setBottomSheetHeight(["30%", "80%"])
+                                                    setBottomSheetHeight(["30%", "85%"])
                                                     // setTimeout(() => {
                                                     //     bottomSheetRef.current?.snapToIndex(1)
                                                     // }, 200);
@@ -812,7 +943,7 @@ const BookingScreen = () => {
                         }}
                         onPress={() => {
                             if ((showContactBottomSheet || showdatePickerSheet) && !isDeliveryModule) {
-                                setBottomSheetHeight(["30%", "80%"])
+                                setBottomSheetHeight(["30%", "85%"])
                                 // bottomSheetRef.current?.snapToPosition("70%", {
                                 //     duration: 600
                                 // })
@@ -823,7 +954,7 @@ const BookingScreen = () => {
                                 //     duration: 600
                                 // })
                                 setSelectedCarType(undefined)
-                                setBottomSheetHeight(["30%", "80%"])
+                                setBottomSheetHeight(["30%", "85%"])
                             }
                             else {
                                 dispatch(setAppliedCoupon(-1))
@@ -832,7 +963,6 @@ const BookingScreen = () => {
                         }}
                     />
                 </View>
-                {console.log("selectedTempCarType---", selectedTempCarType)}
                 <CustomMapContainer
                     ref={mapRef}
                     region={{
@@ -841,24 +971,6 @@ const BookingScreen = () => {
                         latitudeDelta: 0.015,
                         longitudeDelta: 0.0121,
                     }}>
-                    {/* <MapViewDirections apikey={GOOGLE_MAP_API}
-                        origin={bookingDestinations[0]}
-                        destination={bookingDestinations[bookingDestinations.length - 1]}
-                        splitWaypoints
-                        waypoints={bookingDestinations}
-                        mode='DRIVING'
-                        strokeWidth={3}
-                        strokeColor="hotpink"
-                        fillColor='red'
-                        optimizeWaypoints={true}
-                        precision="high"
-                        onReady={(res) => {
-                            setDirectionCoords(res?.coordinates)
-                        }}
-
-                    // lineDashPhase={10}
-                    // lineDashPattern={[-2, 5]}
-                    /> */}
                     {routeTrackList ?
                         <Polyline
                             coordinates={routeTrackList}
@@ -875,6 +987,7 @@ const BookingScreen = () => {
                             ]}
                             strokeWidth={3}
                             strokeColor={colors.SECONDARY_ICON}
+                            fillColor={colors.SECONDARY_ICON}
                             lineDashPattern={[2, 2]}
                         />
                     ) : null}
@@ -887,6 +1000,7 @@ const BookingScreen = () => {
                             ]}
                             strokeWidth={3}
                             strokeColor={colors.SECONDARY_ICON}
+                            fillColor={colors.SECONDARY_ICON}
                             lineDashPattern={[2, 2]}
                         />
                     ) : null}
@@ -940,9 +1054,10 @@ const BookingScreen = () => {
                     index={0}
                     enablePanDownToClose={false}
                     animateOnMount={false}
+                    enableOverDrag={false}
                     enableDynamicSizing={showdatePickerSheet ? false : true}
                     backgroundStyle={{
-                        backgroundColor: showdatePickerSheet ? colors.SECONDARY_BACKGROUND : colors.PRIMARY_BACKGROUND
+                        backgroundColor: showdatePickerSheet ? colors.PRIMARY_BACKGROUND : colors.PRIMARY_BACKGROUND
                     }}
                     containerStyle={Styles.bottomSheetContainerStyle}
                     footerComponent={renderFooter}
@@ -987,8 +1102,12 @@ const BookingScreen = () => {
                                         <View style={GlobalStyle.rowContainer}>
                                             <Text style={Styles.toggleBtnText}>{t(TranslationKeys.ride)}</Text>
                                             <TouchableOpacity activeOpacity={1} onPress={() => {
-                                                setPickupMode(pickupMode == "NOW" ? PICK_UP_MODE.LATER : PICK_UP_MODE.NOW)
-                                                setPickUpTime(pickupMode == "NOW" ? PICK_UP_MODE.LATER : PICK_UP_MODE.NOW);
+                                                if (rideQuotationError || disabled) {
+                                                    AppAlert(t(TranslationKeys.error), t(TranslationKeys.no_route_found))
+                                                } else {
+                                                    setPickupMode(pickupMode == "NOW" ? PICK_UP_MODE.LATER : PICK_UP_MODE.NOW)
+                                                    setPickUpTime(pickupMode == "NOW" ? PICK_UP_MODE.LATER : PICK_UP_MODE.NOW);
+                                                }
                                                 // setisPickUpMode({ visible: true, message: "This features will be unlocked soon." })
                                             }} style={[Styles.toggleContainerStyle, {
                                                 backgroundColor: pickupMode !== "NOW" ? colors.GREEN_LIGHT : colors.SHADOW_1,
@@ -1006,7 +1125,11 @@ const BookingScreen = () => {
                                             <TouchableOpacity
                                                 activeOpacity={1}
                                                 onPress={() => {
-                                                    enableSecureModeApiCall(isEnablesecureMode == "on" ? false : true)
+                                                    if (rideQuotationError || disabled) {
+                                                        AppAlert(t(TranslationKeys.error), t(TranslationKeys.no_route_found))
+                                                    } else {
+                                                        enableSecureModeApiCall(isEnablesecureMode == "on" ? false : true)
+                                                    }
                                                 }}
                                                 style={{
                                                     ...Styles.toggleContainerStyle,
@@ -1026,7 +1149,14 @@ const BookingScreen = () => {
                             {/* //* Discount Coupans Container */}
                             <>
                                 <View style={Styles.discountCouponContainer}>
-                                    <TouchableOpacity activeOpacity={1} onPress={() => setIsOpenDiscountCouponsModal(true)} style={[GlobalStyle.rowContainer, Styles.discountRowContainer]}>
+                                    <TouchableOpacity activeOpacity={1} onPress={() => {
+                                        if (rideQuotationError || disabled) {
+                                            AppAlert(t(TranslationKeys.error), t(TranslationKeys.no_route_found))
+                                        } else {
+                                            setIsOpenDiscountCouponsModal(true)
+                                        }
+                                    }
+                                    } style={[GlobalStyle.rowContainer, Styles.discountRowContainer]}>
                                         <Text style={Styles.discountCouponsText}>{t(TranslationKeys.discount_coupons)}</Text>
                                         <Image source={Icons.RIGHT_ARROW_ICON} style={Styles.rightArrowIconStyle} />
                                     </TouchableOpacity>
@@ -1073,7 +1203,11 @@ const BookingScreen = () => {
                             {/* select payment method */}
                             <CustomIconTextView
                                 onPress={() => {
-                                    navigation.navigate('SelectPaymentModeScreen')
+                                    if (rideQuotationError || disabled) {
+                                        AppAlert(t(TranslationKeys.error), t(TranslationKeys.no_route_found))
+                                    } else {
+                                        navigation.navigate('SelectPaymentModeScreen')
+                                    }
                                 }}
                                 activeOpacity={1}
                                 title={paymentMethod == "Cash" ? t(TranslationKeys.cash) : paymentMethod == "Card" ? t(TranslationKeys.card_payment) : t(TranslationKeys.upi_payment)}
@@ -1088,13 +1222,17 @@ const BookingScreen = () => {
                             {selectedContact?.name ?
                                 <TouchableOpacity
                                     onPress={async () => {
-                                        await checkContactsPermission().then(res => {
-                                            if (res) {
-                                                setShowContactBottomSheet(true);
-                                                setBottomSheetHeight(["50%"]);
-                                                bottomSheetRef.current?.snapToIndex(0);
-                                            }
-                                        })
+                                        if (rideQuotationError || disabled) {
+                                            AppAlert(t(TranslationKeys.error), t(TranslationKeys.no_route_found))
+                                        } else {
+                                            await checkContactsPermission().then(res => {
+                                                if (res) {
+                                                    setShowContactBottomSheet(true);
+                                                    setBottomSheetHeight(["50%"]);
+                                                    bottomSheetRef.current?.snapToIndex(0);
+                                                }
+                                            })
+                                        }
                                     }}
                                     activeOpacity={1} style={[Styles.contactPickerContainer, Styles.commonBackShadow, Styles.commonPaddingContainer]}>
                                     <View style={GlobalStyle.rowContainer}>
@@ -1124,9 +1262,13 @@ const BookingScreen = () => {
                                 :
                                 <CustomIconTextView
                                     onPress={() => {
-                                        setShowContactBottomSheet(true);
-                                        setBottomSheetHeight(["50%"]);
-                                        bottomSheetRef.current?.snapToIndex(0);
+                                        if (rideQuotationError || disabled) {
+                                            AppAlert(t(TranslationKeys.error), t(TranslationKeys.no_route_found))
+                                        } else {
+                                            setShowContactBottomSheet(true);
+                                            setBottomSheetHeight(["50%"]);
+                                            bottomSheetRef.current?.snapToIndex(0);
+                                        }
                                     }}
                                     activeOpacity={1}
                                     title={(selectedContact?.name && (selectedContact?.name !== AppStrings.myself)) ? selectedContact?.name : t(TranslationKeys.book_for_self)}
@@ -1189,16 +1331,22 @@ const BookingScreen = () => {
 
                     {showdatePickerSheet ?
                         <View style={Styles.datePickerContainerStyle}>
-                            <DatePicker
-                                date={new Date()}
-                                // onDateChange={(value) => {
-                                //     setDate(value)
-                                // }}
-                                // locale={globalLang}
-                                // minimumDate={new Date(new Date().getTime() + 30 * 60 * 1000)}
-                                style={Styles.datePickerStyle}
-                                textColor={colors.PRIMARY_TEXT}
-                            />
+                            <View style={{
+                                backgroundColor: colors.SECONDARY_BACKGROUND,
+                                marginHorizontal: wp(5),
+                                borderRadius: wp(2),
+                            }}>
+                                <DatePicker
+                                    date={date}
+                                    onDateChange={(value) => {
+                                        setDate(value)
+                                    }}
+                                    locale={globalLang}
+                                    minimumDate={new Date(new Date().getTime() + 30 * 60 * 1000)}
+                                    style={Styles.datePickerStyle}
+                                    textColor={colors.PRIMARY_TEXT}
+                                />
+                            </View>
                         </View> : null
                     }
 
@@ -1218,11 +1366,12 @@ const BookingScreen = () => {
                                 setshowContactListModal(false)
                                 setTimeout(() => {
                                     setShowContactBottomSheet(false)
-                                    setBottomSheetHeight(["30%", "80%"])
-                                    bottomSheetRef.current?.snapToPosition("80%", {
+                                    setBottomSheetHeight(["30%", "85%"])
+                                    bottomSheetRef.current?.snapToPosition("98%", {
                                         duration: 600
                                     })
-                                    bottomSheetRef.current?.snapToIndex(0)
+                                    setSheetIndex(1)
+                                    // bottomSheetRef.current?.snapToIndex(0)
                                 }, 500);
                             }}
                         /> : null}
@@ -1240,11 +1389,11 @@ const BookingScreen = () => {
                                     closeDatePickerBottomSheet("cancel")
                                     setPickupMode("NOW")
                                     if (Platform.OS == 'android') {
-                                        bottomSheetRef.current?.snapToPosition("80%", {
+                                        bottomSheetRef.current?.snapToPosition("85%", {
                                             duration: 600
                                         })
                                     } else {
-                                        setBottomSheetHeight(["30%", "80%"])
+                                        setBottomSheetHeight(["30%", "85%"])
                                     }
                                 }}
                                 title={t(TranslationKeys.cancel)} />
@@ -1253,23 +1402,23 @@ const BookingScreen = () => {
                                 onPress={() => {
                                     closeDatePickerBottomSheet("confirm")
                                     if (Platform.OS == 'android') {
-                                        bottomSheetRef.current?.snapToPosition("80%", {
+                                        bottomSheetRef.current?.snapToPosition("85%", {
                                             duration: 600
                                         })
                                     } else {
-                                        setBottomSheetHeight(["30%", "80%"])
+                                        setBottomSheetHeight(["30%", "85%"])
                                     }
                                 }}
                                 title={t(TranslationKeys.confirm)} />
                         </View>
                         :
                         <CustomBottomBtn
-                            disabled={rideQuotationError}
+                            disabled={rideQuotationError || disabled}
                             style={{ backgroundColor: !rideQuotationError ? colors.PRIMARY : colors.SECONDARY_LIGHT_ICON }}
                             onPress={() => {
                                 if (showContactBottomSheet) {
                                     selectedTempContact && setSelectedContact(selectedTempContact)
-                                    setBottomSheetHeight(["30%", "80%"])
+                                    setBottomSheetHeight(["30%", "85%"])
                                     // bottomSheetRef.current?.snapToPosition("70%", {
                                     //     duration: 600
                                     // })
@@ -1297,7 +1446,7 @@ const BookingScreen = () => {
                                                 navigation.navigate('DeliveyReviewScreen')
                                             } else {
                                                 setSelectedDate(moment(date).format("YYYY-MM-DDTHH:mm:ss"))
-                                                setBottomSheetHeight(["30%", "80%"])
+                                                setBottomSheetHeight(["30%", "85%"])
                                                 // setTimeout(() => {
                                                 //     bottomSheetRef.current?.snapToIndex(1)
                                                 // }, 200);
@@ -1635,9 +1784,9 @@ const useStyles = () => {
             },
             datePickerContainerStyle: {
                 flex: 1,
-                backgroundColor: colors.SECONDARY_BACKGROUND,
+
                 justifyContent: 'flex-start',
-                // alignItems: 'center'
+                alignItems: 'center'
             },
             datePickerStyle: {
                 alignSelf: 'center',
@@ -1650,6 +1799,7 @@ const useStyles = () => {
             },
             bottomSheetScrollView: {
                 backgroundColor: colors.TRANSPARENT,
+                // marginBottom: wp(23)
             },
             commonPaddingContainer: {
                 paddingVertical: wp(3.5),

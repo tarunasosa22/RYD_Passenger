@@ -112,7 +112,7 @@ const NotificationScreen = () => {
             {(item.body?.type == 'CUSTOM_NOTIFICATION' && item.body.imageUrl) ? <Image source={{ uri: item.body.imageUrl }} style={{ width: wp(12), height: wp(12), resizeMode: 'contain' }} /> : null}
           </TouchableOpacity>
         </View>
-        {(item?.description?.length > 150 || containsThreeNewlines) &&
+        {(item?.description?.length > 150 || containsThreeNewlines) ? 
           <TouchableOpacity
             style={{ alignItems: 'flex-end', paddingHorizontal: wp(4) }}
             onPress={() => {
@@ -126,7 +126,7 @@ const NotificationScreen = () => {
             <>
               <Text style={{ ...Styles.notificationText, marginTop: wp(-3), color: colors.SECONDARY, textDecorationLine: 'underline' }}>{t(TranslationKeys.read_more)}</Text>
             </>
-          </TouchableOpacity>}
+          </TouchableOpacity> : null}
       </>
 
     )

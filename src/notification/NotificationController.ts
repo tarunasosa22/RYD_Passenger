@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { PermissionsAndroid, Platform } from 'react-native';
 import messaging from '@react-native-firebase/messaging';
 import { store } from '../redux/Store';
 import { getFcmToken } from '../redux/slice/authSlice/AuthSlice';
@@ -7,7 +7,7 @@ import { getFcmToken } from '../redux/slice/authSlice/AuthSlice';
 // import PushNotificationIOS from '@react-native-community/push-notification-ios';
 import { NOTIFICATION_TYPE, PICK_UP_MODE, RIDE_STATUS } from '../utils/Constats';
 import { navigationRef } from '../utils/NavigationServices';
-import notifee, { AndroidImportance } from '@notifee/react-native';
+import notifee, { AndroidImportance, EventType } from '@notifee/react-native';
 
 const NotificationController = () => {
 
@@ -59,22 +59,41 @@ const NotificationController = () => {
             }
             // ** NAVIGATE TO PREBOOK SCREEN WHEN BOOKED RIDE WITH LATER PAYLOAD */
             else if (remoteMessage?.data?.type === NOTIFICATION_TYPE.RIDE_REQUEST_ACCEPTED) {
+                let parseData = JSON.parse(remoteMessage?.data?.details.replace(/'/g, '"'))
                 setTimeout(() => {
                     if (navigationRef.current?.getCurrentRoute()?.name !== "YourRidesScreen") {
-                        navigationRef.current?.reset({
-                            index: 0,
-                            routes: [
-                                {
-                                    name: 'DrawerStack',
-                                    params: {
-                                        screen: 'YourRidesScreen',
+                        if (parseData?.pickup_mode === PICK_UP_MODE.LATER) {
+                            navigationRef.current?.reset({
+                                index: 0,
+                                routes: [
+                                    {
+                                        name: 'DrawerStack',
                                         params: {
-                                            notificationType: `${RIDE_STATUS.DRIVER_ALLOCATED},${RIDE_STATUS.ONGOING}`
+                                            screen: 'PreBookScreen',
+                                            params: {
+                                                notificationType: `${RIDE_STATUS.DRIVER_ALLOCATED},${RIDE_STATUS.ONGOING}, ${RIDE_STATUS.DRIVER_ENDED}`
+                                            }
                                         }
-                                    }
-                                },
-                            ]
-                        })
+                                    },
+                                ]
+                            })
+                        }
+                        else {
+                            navigationRef.current?.reset({
+                                index: 0,
+                                routes: [
+                                    {
+                                        name: 'DrawerStack',
+                                        params: {
+                                            screen: 'YourRidesScreen',
+                                            params: {
+                                                notificationType: `${RIDE_STATUS.DRIVER_ALLOCATED},${RIDE_STATUS.ONGOING}, ${RIDE_STATUS.DRIVER_ENDED}`
+                                            }
+                                        }
+                                    },
+                                ]
+                            })
+                        }
                     }
                 }, 200);
             }
@@ -110,7 +129,7 @@ const NotificationController = () => {
                                     params: {
                                         screen: 'YourRidesScreen',
                                         params: {
-                                            notificationType: `${RIDE_STATUS.DRIVER_ALLOCATED},${RIDE_STATUS.ONGOING}`
+                                            notificationType: `${RIDE_STATUS.DRIVER_ALLOCATED},${RIDE_STATUS.ONGOING},${RIDE_STATUS.DRIVER_ENDED}`
                                         }
                                     }
                                 },
@@ -202,6 +221,9 @@ const NotificationController = () => {
                 let modifiedJsonString = remoteMessage?.data?.details.replace(/'/g, '"');
                 modifiedJsonString = modifiedJsonString.replace(`"profilePic": None`, `"profilePic": null`);
                 modifiedJsonString = modifiedJsonString.replace(`"upiId": None`, `"upiId": null`);
+                modifiedJsonString = modifiedJsonString.replace(`"senderText": None`, `"senderText": null`);
+                modifiedJsonString = modifiedJsonString.replace(`"recieverText": None`, `"recieverText": null`);
+                modifiedJsonString = modifiedJsonString.replace(`"text": None`, `"text": null`);
                 modifiedJsonString = modifiedJsonString.replace(/\bTrue\b/g, "true");    // Replace True with true
                 modifiedJsonString = modifiedJsonString.replace(/\bFalse\b/g, "false");
                 // Step 2: Parse the JSON string into a JavaScript object
@@ -214,7 +236,7 @@ const NotificationController = () => {
                                 params: {
                                     screen: 'YourRidesScreen',
                                     params: {
-                                        notificationType: `${RIDE_STATUS.DRIVER_ALLOCATED},${RIDE_STATUS.ONGOING}`
+                                        notificationType: `${RIDE_STATUS.DRIVER_ALLOCATED},${RIDE_STATUS.ONGOING},${RIDE_STATUS.DRIVER_ENDED}`
                                     }
                                 }
                             },
@@ -280,66 +302,187 @@ const NotificationController = () => {
     //     }
     // });
 
+    // useEffect(() => {
+    //     messaging().onNotificationOpenedApp((remoteMessage) => {
+    //         console.log("onNotificationOpenedApp = ", remoteMessage)
+    //         onNotificationTap(remoteMessage)
+    //     })
+    //     messaging().getInitialNotification().then((remoteMessage) => {
+    //         console.log("getInitialNotification = ", remoteMessage)
+    //         onNotificationTap(remoteMessage)
+    //     })
+    //     messaging().onMessage(async (remoteMessage) => {
+    //         console.log("onMessage = ", remoteMessage)
+    //         // if (Platform.OS == 'ios') {
+    //         //     PushNotificationIOS.addNotificationRequest({
+    //         //         title: remoteMessage?.notification?.title,
+    //         //         body: remoteMessage?.notification?.body,
+    //         //         id: remoteMessage?.messageId?.toString() ?? "",
+    //         //         userInfo: remoteMessage
+    //         //     })
+    //         // }
+    //         if (Platform.OS === 'android') {
+    //             // PushNotification.createChannel(
+    //             //     {
+    //             //         channelId: 'fcm_fallback_notification_channel', // (required)
+    //             //         channelName: 'fcm_fallback_notification_channel', // (required)
+    //             //     },
+    //             //     () => { },
+    //             // );
+    //             console.log("Platform.Version---->", Platform.Version)
+    //             // if (Platform.Version > 32) {
+    //             //     PushNotification.cancelAllLocalNotifications();
+    //             //     PushNotification.localNotification({
+    //             //         channelId: 'general_notification_channel',
+    //             //         message: remoteMessage?.notification?.body ?? '',
+    //             //         title: remoteMessage?.notification?.title ?? '',
+    //             //         bigPictureUrl: remoteMessage?.notification?.android?.imageUrl ?? undefined,
+    //             //         userInfo: remoteMessage?.data
+    //             //     });
+    //             // }
+    //         }
+    //     })
+
+    // }, [])
+
     useEffect(() => {
-        // Create notification channel for Android
-        async function createChannel() {
+        requestUserPermission();
+
+        // Set up foreground notification handler
+        const unsubscribe = notifee.onForegroundEvent(({ type, detail }) => {
+            switch (type) {
+                case EventType.DISMISSED:
+                    console.log('User dismissed notification', detail.notification);
+                    break;
+                case EventType.PRESS:
+                    console.log('User pressed notification', detail.notification);
+                    // notificationAction(
+                    //     detail?.notification?.data as {
+                    //         notification_type?: string | undefined;
+                    //         id?: string | undefined;
+                    //     },
+                    // );
+                    onNotificationTap(detail)
+
+                    break;
+                case EventType.DELIVERED:
+                    console.log('Notification delivered', detail.notification);
+                    break;
+            }
+        });
+
+        // Set up Firebase messaging foreground handler
+        const unsubscribeMessage = messaging().onMessage(async remoteMessage => {
             if (Platform.OS === 'android') {
-                await notifee.createChannel({
-                    id: 'default',
-                    name: 'Default Channel',
-                    importance: AndroidImportance.HIGH,
+                // Display the notification using notifee when app is in foreground
+                await notifee.displayNotification({
+                    title: remoteMessage.notification?.title,
+                    body: remoteMessage.notification?.body,
+                    android: {
+                        channelId: 'default',
+                        pressAction: {
+                            id: 'default',
+                        },
+                    },
+                    data: remoteMessage.data,
                 });
             }
-        }
-        createChannel();
+        });
 
-        messaging().onNotificationOpenedApp((remoteMessage) => {
-            console.log("onNotificationOpenedApp = ", remoteMessage)
-            onNotificationTap(remoteMessage)
-        })
+        const appOpenSubscribe = messaging().onNotificationOpenedApp(
+            remoteMessage => {
+                // notificationAction(
+                //     remoteMessage.data as {
+                //         notification_type?: string | undefined;
+                //         id?: string | undefined;
+                //     },
+                // );
+                onNotificationTap(remoteMessage)
+                console.log(
+                    'Notification caused app to open from background state:',
+                    remoteMessage.notification,
+                );
+            },
+        );
 
-        messaging().getInitialNotification().then((remoteMessage) => {
-            console.log("getInitialNotification = ", remoteMessage)
-            onNotificationTap(remoteMessage)
-        })
+        return () => {
+            unsubscribe();
+            unsubscribeMessage();
+            appOpenSubscribe();
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
-        messaging().onMessage(async (remoteMessage) => {
-            console.log("onMessage = ", remoteMessage)
+    async function requestUserPermission() {
+        try {
+            // Request Android notification permissions
+            if (Platform.OS === 'android') {
+                const permissionStatus = await PermissionsAndroid.request(
+                    'android.permission.POST_NOTIFICATIONS',
+                );
+                if (permissionStatus !== PermissionsAndroid.RESULTS.GRANTED) {
+                    console.warn('Notification permission denied');
+                    return false;
+                }
 
-            // Display notification using Notifee
-            await notifee.displayNotification({
-                title: remoteMessage?.notification?.title,
-                body: remoteMessage?.notification?.body,
-                android: {
-                    channelId: 'default',
-                    importance: AndroidImportance.HIGH,
-                    // Set large icon if available
-                    largeIcon: remoteMessage?.notification?.android?.imageUrl,
-                    // Preserve the notification data for handling tap events
-                    pressAction: {
+                // Create Android notification channels
+                await notifee.createChannels([
+                    {
                         id: 'default',
+                        name: 'Default',
+                        lights: true,
+                        vibration: true,
+                        importance: AndroidImportance.HIGH,
                     },
-                    data: remoteMessage?.data,
-                },
-                ios: {
-                    // Customize iOS notification if needed
-                    categoryId: 'default',
-                    data: remoteMessage?.data,
-                },
-            });
-        });
-
-        // Handle notification press events
-        return notifee.onForegroundEvent(({ type, detail }) => {
-            if (type === 1) { // TYPE.PRESS
-                onNotificationTap({ data: detail.notification?.android?.data || detail.notification?.ios?.data });
+                    {
+                        id: 'orders',
+                        name: 'Orders',
+                        lights: true,
+                        vibration: true,
+                        importance: AndroidImportance.HIGH,
+                    },
+                    {
+                        id: 'transactions',
+                        name: 'Transactions',
+                        lights: true,
+                        vibration: true,
+                        importance: AndroidImportance.HIGH,
+                    },
+                ]);
             }
-        });
-    }, []);
 
-    useEffect(() => {
-        store.dispatch(getFcmToken())
-    }, []);
+            // Register device for remote messages if not already registered
+            if (!messaging().isDeviceRegisteredForRemoteMessages) {
+                await messaging().registerDeviceForRemoteMessages();
+            }
+
+            // Request messaging permission
+            const authStatus = await messaging().requestPermission();
+            const enabled =
+                authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+                authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+            if (enabled) {
+                console.log('Push notifications authorized:', authStatus);
+                // Get FCM token
+                const token = await messaging().getToken();
+                if (token) {
+                    console.log('FCM Token:', token);
+                    return true;
+                }
+            } else {
+                console.warn('User declined push notifications');
+                return false;
+            }
+        } catch (error) {
+            console.error('Error requesting notification permissions:', error);
+            return false;
+        }
+    }
+
+    // useEffect(() => {
+    //     store.dispatch(getFcmToken())
+    // }, []);
 
     return null
 }

@@ -28,6 +28,7 @@ interface RideCancelByType {
     reason: string,
     cancelBy: string,
     createdAt: string,
+    isDisputed: boolean
 };
 
 export interface RiderAppStateProps {
@@ -40,6 +41,16 @@ export interface ChangeLocationProps {
     resetDestinationDate: boolean,
     location: DestinationsProps | undefined
 };
+
+export interface DeletedUserProps {
+    email: string,
+    id: number,
+    isDriver: boolean,
+    name: string,
+    phoneNumber: string,
+    profilePic: string,
+    user: number
+}
 
 export interface RideDetailsTypes {
     payment_method: string;
@@ -108,7 +119,8 @@ export interface RideDetailsTypes {
         goodsType: string,
         goodsPackage: string,
         goodsWeight: number
-    }
+    },
+    deletedUser: DeletedUserProps[]
 };
 
 interface initialStateTypes {
@@ -206,7 +218,7 @@ const initialState: initialStateTypes = {
     isRefundText: false,
     globalLang: 'en',
     lastActiveTime: '',
-    isComplateTimer:false,
+    isComplateTimer: false,
     lastActiveStep: 0,
     paymentMethod: "Card",
     appliedCoupon: -1,
@@ -430,10 +442,10 @@ export const findDriver = createAsyncThunk<FindRideTypes, number, { rejectValue:
         }
     });
 
-    export const riderAppState = createAsyncThunk<RiderAppStateProps, FormData, { rejectValue: apiErrorTypes }>(HOME + "/riderAppState",
+export const riderAppState = createAsyncThunk<RiderAppStateProps, FormData, { rejectValue: apiErrorTypes }>(HOME + "/riderAppState",
     async (params, { rejectWithValue, signal }) => {
         try {
-            const response = await axiosClient.patch(ApiConstants.RIDER_APP_STATE , params)
+            const response = await axiosClient.patch(ApiConstants.RIDER_APP_STATE, params)
             return response.data
         } catch (e: any) {
             if (e.code !== "ERR_NETWORK" && e.response.status !== 401) {
@@ -754,5 +766,5 @@ export const HomeSlice = createSlice({
     },
 });
 
-export const {setIsRefundText, resetRecentList,setIsComplateTimer, setCreateRideData,setCreateDeliveryRideData,setAppliedCoupon, setPaymentMethod, setDestinations, setRoutesTrackList, setGlobalLang, resetLastActiveTime, resetRoutesTrackList, setLastActiveTime, setLastActibeStep, setFilteredDestinations, resetDestinations, setBookingDestinations, resetRideQuotationList, resetRideDetails, pickUpLocationReducer, onChangePickUpLocation, filterSavePlacesReducer, resetSavedLocation } = HomeSlice.actions;
+export const { setIsRefundText, resetRecentList, setIsComplateTimer, setCreateRideData, setCreateDeliveryRideData, setAppliedCoupon, setPaymentMethod, setDestinations, setRoutesTrackList, setGlobalLang, resetLastActiveTime, resetRoutesTrackList, setLastActiveTime, setLastActibeStep, setFilteredDestinations, resetDestinations, setBookingDestinations, resetRideQuotationList, resetRideDetails, pickUpLocationReducer, onChangePickUpLocation, filterSavePlacesReducer, resetSavedLocation } = HomeSlice.actions;
 export default HomeSlice.reducer;

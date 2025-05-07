@@ -35,7 +35,7 @@ import { NativeSyntheticEvent } from 'react-native';
 import CommonDropDownComponent from '../../components/CommonDropDownComponent';
 import { TouchableOpacity } from 'react-native';
 import CustomRadioButton from '../../components/CustomRadioButton';
-import { GoodsTypeProps, goodsInfoApi, setDeliveryDetails, setGoodsType, setPackageType } from '../../redux/slice/rideSlice/RideSlice';
+import { GoodsTypeProps, goodsInfoApi, phone_validation_api, setDeliveryDetails, setGoodsType, setPackageType } from '../../redux/slice/rideSlice/RideSlice';
 import { useIsFocused } from '@react-navigation/native';
 import { geoCoderAddress } from '../../utils/HelperFunctions';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -78,6 +78,8 @@ const DeliveryContactScreen = () => {
     const [isShowCancelLocation, setIsShowCancelLocation] = useState<boolean>();
     const [isShowCancelReceiverLocation, setIsShowCancelReceiverLocation] = useState<boolean>();
     const [currentScreen, setCurrentScreen] = useState(false);
+    const [receiverName1, setReceiverName1] = useState();
+    const [receiverPhoneNumber1, setReceiverPhoneNumber1] = useState();
     const [selectItem, setSelectItem] = useState<any>()
     const focus = useIsFocused()
     const [newGoods, setNewGoods] = useState<GoodTypes[] | []>([])
@@ -90,6 +92,7 @@ const DeliveryContactScreen = () => {
     const [focusedWeight, setFocusedWeight] = useState(false);
     const [selectedGoodType, setSelectedGoodType] = useState({ lable: "", isError: false })
     const [selectedPackageType, setSelectedPackageType] = useState({ lable: "", isError: false })
+    const scrollViewRef = useRef(null);
 
     useEffect(() => {
         if (focus) {
@@ -111,14 +114,22 @@ const DeliveryContactScreen = () => {
     const senderDetailsSchema = yup.object().shape({
         senderName: yup.string().trim().required(t(TranslationKeys.please_enter_name)).matches(NameRegExp, t(TranslationKeys.name_cannot_containe_number)).max(50, t(TranslationKeys.name_not_exceed)),
         receiverName: yup.string().trim().required(t(TranslationKeys.please_enter_name)).matches(NameRegExp, t(TranslationKeys.name_cannot_containe_number)).max(50, t(TranslationKeys.name_not_exceed)),
-        senderPhoneNumber: yup.string().trim().min(4, t(TranslationKeys.please_enter_valid_phone_number)).required(t(TranslationKeys.phone_number_is_requried)),
-        receiverPhoneNumber: yup.string().trim().min(4, t(TranslationKeys.please_enter_valid_phone_number)).required(t(TranslationKeys.phone_number_is_requried)),
+        senderPhoneNumber: yup.number().typeError(t(TranslationKeys.please_enter_valid_phone_number)).min(4, t(TranslationKeys.please_enter_valid_phone_number)).required(t(TranslationKeys.phone_number_is_requried)),
+        receiverPhoneNumber: yup.number().typeError(t(TranslationKeys.please_enter_valid_phone_number)).min(4, t(TranslationKeys.please_enter_valid_phone_number)).required(t(TranslationKeys.phone_number_is_requried)).test(
+            'not-same-as-sender',
+            t(TranslationKeys.sender_and_receiver_not_same),
+            function (value) {
+                const { senderPhoneNumber } = this.parent;
+                let value1 = cc + value
+                return Number(value1) !== Number(senderPhoneNumber);
+            }
+        ),
         receiverAddress: yup.string().trim().test(
             'receiverAddress',
             (t(TranslationKeys.please_enter_delivery_address)),
             function (value) {
                 if (this.parent.receiverAddressTouched || !bookingDestinations[1]?.address) {
-                    return !!value; 
+                    return !!value;
                 }
                 return true;
             }
@@ -130,7 +141,7 @@ const DeliveryContactScreen = () => {
                 if (this.parent.senderAddressTouched || !bookingDestinations[0]?.address) {
                     return !!value;
                 }
-                return true; 
+                return true;
             }
         ),
     });
@@ -143,6 +154,7 @@ const DeliveryContactScreen = () => {
         packageWeight: yup
             .number()
             .typeError(t(TranslationKeys.please_enter_valid_weight)) // Ensures input is a number
+            .moreThan(0, t(TranslationKeys.please_enter_valid_weight)) // Disallows 0, allows values greater than 0
             .max(Number(goodsInfo?.maxWeight), `${t(TranslationKeys.not_enter_maximum_weight)} ${goodsInfo?.maxWeight} ${t(TranslationKeys.kg)}.`) // ✅ Weight must be more than 50
             .required(t(TranslationKeys.please_enter_weight)),
     });
@@ -163,13 +175,13 @@ const DeliveryContactScreen = () => {
         initialValues: {
             senderName: userDetail?.name ?? '',
             senderPhoneNumber: userDetail?.phoneNumber ?? '',
-            receiverName: '',
+            receiverName: receiverName1 ?? '',
             goodsType: {
                 label: ""
             },
             packageWeight: '',
             goodPackage: '',
-            receiverPhoneNumber: '',
+            receiverPhoneNumber: receiverPhoneNumber1 ?? '',
             senderAddress: bookingDestinations[0]?.address ?? '',
             receiverAddress: bookingDestinations[1]?.address ?? '',
             senderAddressTouched: false,
@@ -179,20 +191,63 @@ const DeliveryContactScreen = () => {
         // validateOnChange: false,// ✅ Prevents all fields from being validated on every change
         // validateOnBlur: true,
         validationSchema: !currentScreen ? senderDetailsSchema : packageDetailsSchema,
-        onSubmit: (values) => {
+        onSubmit: (values, { setErrors }) => {
             if (!currentScreen) {
                 if ((values.senderAddressTouched || !bookingDestinations[0]?.address) && !values.senderAddress) {
                     setFieldError('senderAddress', t(TranslationKeys.please_enter_pickup_address));
                     return;
+                } else if (!locationInputFeildCoordinate?.latitude && !locationInputFeildCoordinate?.longitude) {
+                    setFieldError('senderAddress', t(TranslationKeys.please_enter_valid_pickup_address));
+                    return
                 }
 
                 if ((values.receiverAddressTouched || !bookingDestinations[1]?.address) && !values.receiverAddress) {
                     setFieldError('receiverAddress', t(TranslationKeys.please_enter_delivery_address));
                     return;
+                } else if (!locationReceiverInputFeildCoordinate?.latitude && !locationReceiverInputFeildCoordinate?.longitude) {
+                    setFieldError('receiverAddress', t(TranslationKeys.please_enter_valid_delivery_address));
+                    return
                 }
-        
-                setCurrentScreen(true);
-                dispatch(setBookingDestinations(destinations))
+
+                const data = new FormData()
+                data.append("senderPhoneNumber", values.senderPhoneNumber.startsWith('+') ? values.senderPhoneNumber : '+' + selectedSenderCountry + values.senderPhoneNumber)
+                data.append("receiverPhoneNumber", '+' + selectedCountry + values.receiverPhoneNumber)
+                let errors = {};
+                dispatch(phone_validation_api(data)).unwrap().then((res: any) => {
+                    let destination = [{
+                        address: locationInputFeildCoordinate?.address,
+                        id: locationInputFeildCoordinate?.id,
+                        latitude: Number(locationInputFeildCoordinate?.latitude),
+                        longitude: Number(locationInputFeildCoordinate?.longitude),
+                        state: locationInputFeildCoordinate?.state
+                    },
+                    {
+                        address: locationReceiverInputFeildCoordinate?.address,
+                        id: locationReceiverInputFeildCoordinate?.id,
+                        latitude: Number(locationReceiverInputFeildCoordinate?.latitude),
+                        longitude: Number(locationReceiverInputFeildCoordinate?.longitude),
+                        state: locationReceiverInputFeildCoordinate?.state
+                    }]
+                    scrollViewRef.current?.scrollTo({ x: 0, y: 0, animated: true });
+                    setCurrentScreen(true);
+                    dispatch(setBookingDestinations(destination))
+                    if (values.receiverName) {
+                        setReceiverName1(values.receiverName)
+                    }
+                    if (values.receiverPhoneNumber) {
+                        setReceiverPhoneNumber1(values.receiverPhoneNumber)
+                    }
+                }).catch((error: any) => {
+                    if (error.data.senderPhoneNumber) {
+                        errors.senderPhoneNumber = t(TranslationKeys.please_enter_valid_phone_number)
+                    }
+                    if (error.data.receiverPhoneNumber) {
+                        errors.receiverPhoneNumber = t(TranslationKeys.please_enter_valid_phone_number)
+                    }
+                    setErrors(errors)
+                    console.log("🚀  file: HomeScreen.tsx:75  useEffect ~ error:", error)
+                })
+
             } else {
                 const params: {
                     senderFullName?: string
@@ -205,13 +260,13 @@ const DeliveryContactScreen = () => {
                     senderPickupAddress?: any
                     receiverDeliveryAddress?: any
                 } = {
-                    senderFullName: values.senderName,
+                    senderFullName: values.senderName.trim(),
                     senderPhoneNumber: values.senderPhoneNumber.startsWith('+') ? values.senderPhoneNumber : '+' + selectedSenderCountry + values.senderPhoneNumber,
-                    receiverFullName: values.receiverName,
+                    receiverFullName: values.receiverName.trim(),
                     receiverPhoneNumber: '+' + selectedCountry + values.receiverPhoneNumber,
                     goodsType: values.goodsType.label,
                     goodsPackage: values.goodPackage,
-                    goodsWeight: values.packageWeight,
+                    goodsWeight: Number(values.packageWeight),
                 };
 
                 if (locationInputFeildCoordinate?.address) {
@@ -235,8 +290,8 @@ const DeliveryContactScreen = () => {
             setLocationInputFeildCoordinate(bookingDestinations[0]);
         }
         if (bookingDestinations[1]?.address) {
-            setFieldValue('receiverAddress', bookingDestinations[1].address); 
-            setLocationReceiverInputFeildCoordinate(bookingDestinations[1]); 
+            setFieldValue('receiverAddress', bookingDestinations[1].address);
+            setLocationReceiverInputFeildCoordinate(bookingDestinations[1]);
         }
     }, [bookingDestinations]);
 
@@ -245,7 +300,7 @@ const DeliveryContactScreen = () => {
         const stateComponent = addressComponents.find(
             (component: any) => component.types.includes('administrative_area_level_1')
         );
-        return stateComponent ? stateComponent.long_name : null; 
+        return stateComponent ? stateComponent.long_name : null;
     };
 
     const renderItem = ({ item, index }: { item: any, index: number }) => {
@@ -302,6 +357,7 @@ const DeliveryContactScreen = () => {
                             setFieldValue("goodsType", '');
                             setFieldValue("goodPackage", '');
                             setFieldValue("packageWeight", '');
+                            scrollViewRef.current?.scrollTo({ x: 0, y: 0, animated: true });
                             setCurrentScreen(false)
                         } else {
                             navigation.goBack()
@@ -312,7 +368,11 @@ const DeliveryContactScreen = () => {
                     keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : StatusBar.currentHeight} // 50 is Button height
                     enabled
                     style={{ flex: 1 }}>
-                    <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps={'handled'} showsVerticalScrollIndicator={false}>
+                    <ScrollView
+                        ref={scrollViewRef}
+                        contentContainerStyle={{ flexGrow: 1 }}
+                        keyboardShouldPersistTaps={'handled'}
+                        showsVerticalScrollIndicator={false}>
                         <CustomContainer>
                             {!currentScreen ? <>
                                 <View style={Styles.conatiner}>
@@ -384,11 +444,11 @@ const DeliveryContactScreen = () => {
                                                     setLocationInputFeildCoordinate({ address: text });
                                                     setFieldTouched('senderAddress', true);
                                                     setFieldValue('senderAddress', text);
-                                                    setFieldValue('senderAddressTouched', true); 
+                                                    setFieldValue('senderAddressTouched', true);
                                                     if (!text) {
                                                         setFieldError('senderAddress', t(TranslationKeys.please_enter_pickup_address));
                                                     } else {
-                                                        setFieldError('senderAddress', ''); 
+                                                        setFieldError('senderAddress', '');
                                                     }
                                                 },
                                                 placeholderTextColor: colors.SECONDARY_TEXT,
@@ -416,7 +476,7 @@ const DeliveryContactScreen = () => {
                                                 components: `country:${code}`,
                                             }}
                                         />
-                                        {touched.senderAddress && errors.senderAddress && (<CommonErrorText title={errors.senderAddress} />)}
+                                        {(touched.senderAddress && errors.senderAddress || !(locationInputFeildCoordinate?.latitude && locationInputFeildCoordinate?.longitude)) && (<CommonErrorText title={errors.senderAddress ?? locationInputFeildCoordinate?.address ? t(TranslationKeys.please_enter_valid_pickup_address) : t(TranslationKeys.please_enter_pickup_address)} />)}
                                     </View>
                                 </View>
                                 <View style={[Styles.conatiner, { marginTop: wp(6) }]}>
@@ -517,8 +577,8 @@ const DeliveryContactScreen = () => {
                                                 components: `country:${code}`,
                                             }}
                                         />
-                                        {touched.receiverAddress && errors.receiverAddress && (
-                                            <CommonErrorText title={errors.receiverAddress} />
+                                        {(touched.receiverAddress && errors.receiverAddress || !(locationReceiverInputFeildCoordinate?.latitude && locationReceiverInputFeildCoordinate?.longitude)) && (
+                                            <CommonErrorText title={errors.receiverAddress ?? locationReceiverInputFeildCoordinate?.address ? t(TranslationKeys.please_enter_valid_delivery_address) : t(TranslationKeys.please_enter_delivery_address)} />
                                         )}
                                     </View>
                                 </View>
@@ -542,7 +602,7 @@ const DeliveryContactScreen = () => {
                                             setFieldValue("goodsType", goodTypeData);
                                         }}
                                         style={[Styles.dropDown]}
-                                        txtStyle={{width:wp(70)}}
+                                        txtStyle={{ width: wp(70) }}
                                     />
                                     <Text style={[Styles.senderText, { marginBottom: wp(3) }]}>{t(TranslationKeys.package_type)}</Text>
                                     <FlatList
@@ -557,8 +617,9 @@ const DeliveryContactScreen = () => {
                                     <Text style={[Styles.senderText, { marginTop: wp(10), marginBottom: wp(3) }]}>{t(TranslationKeys.package_weight)}</Text>
                                     <View style={GlobalStyle.rowContainer}>
                                         <CustomTextInput
+                                            maxLength={10}
                                             isError={(errors.packageWeight && touched.packageWeight)}
-                                            keyboardType='number-pad'
+                                            keyboardType='decimal-pad'
                                             returnKeyType='done'
                                             textInputContainerStyle={{ width: '91%' }}
                                             value={values.packageWeight}
@@ -705,7 +766,7 @@ const useStyles = () => {
                 alignItems: 'center',
                 backgroundColor: colors.BOX_SECONDARY_BACKGROUND,
                 minHeight: wp(14),
-                flex:1,
+                flex: 1,
                 marginHorizontal: wp(0),
                 marginBottom: wp(10)
             },

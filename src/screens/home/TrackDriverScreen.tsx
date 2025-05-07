@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Image, LayoutAnimation, PermissionsAndroid, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CustomMapContainer from '../../components/CustomMapContainer';
@@ -22,7 +22,7 @@ import MapView, { Polyline } from 'react-native-maps';
 import { RideDetailsTypes, rideDetails, setPaymentMethod, } from '../../redux/slice/homeSlice/HomeSlice';
 import MapViewDirections from 'react-native-maps-directions';
 import { APPSTORE_GOOGLE_MAP, ENVIRONMENT, GOOGLE_MAP_API, GOOGLE_MAP_NAVIGATION, PAY_API_ENDPOINT, PHONE_PE_CALLBACK_URL, PHONE_PE_MERCHANT_ID, PLAYSTORE_GOOGLE_MAP, RAZORPAY_KEY_ID, RIDE_DETAILS, SALT_INDEX, SALT_KEY, SOS_URL } from '../../config/Host';
-import { RideLocationTypes, makeRidePayment, resetRideOtpReducer, setApiCounter, setDriverDetails, setRideDetailsData, setRideOtpReducer, setRideStatusReducer, setTipBtnOn, } from '../../redux/slice/rideSlice/RideSlice';
+import { RideLocationTypes, makeRidePayment, resetRideOtpReducer, setApiCounter, setCustomTip, setDriverDetails, setRideDetailsData, setRideOtpReducer, setRideStatusReducer, setTipAmount, setTipBtnOn, setTipConatinerVisible, } from '../../redux/slice/rideSlice/RideSlice';
 import { TouchableOpacity } from 'react-native';
 import CustomActivityIndicator from '../../components/CustomActivityIndicator';
 import { Linking } from 'react-native';
@@ -48,7 +48,11 @@ import { getScrtachCardDetails, setScrtachCardDetails } from '../../redux/slice/
 import RazorpayCheckout from 'react-native-razorpay';
 import { useLanguage } from '../../context/LanguageContext';
 import i18n from '../../localization/i18n';
-import { capturePayment, endRideCardPayment } from '../../redux/slice/paymentSlice/PaymentSlice';
+import { endRideCardPayment } from '../../redux/slice/paymentSlice/PaymentSlice';
+import { current } from '@reduxjs/toolkit';
+import { navigationRef } from '../../utils/NavigationServices';
+import { BottomSheetDefaultFooterProps } from '@gorhom/bottom-sheet/lib/typescript/components/bottomSheetFooter/types';
+import { BottomSheetFooter, BottomSheetScrollView, BottomSheetView } from '@gorhom/bottom-sheet';
 
 interface CoordsTypes {
     latitude: number
@@ -92,17 +96,17 @@ const TrackDriverScreen = () => {
     const { networkStatus } = useAppSelector(state => state.SettingSlice)
     const navigation = useCustomNavigation("TrackDriverScreen");
     const focus = useIsFocused();
-    const { isLoading, routeTrackList } = useAppSelector(state => state.HomeSlice);
-    const { rideDetails, rideStatus, isLoading: makePaymentLoading, rideOtp: OTP, tipBtnOn } = useAppSelector(state => state.RideSlice);
+    const { isLoading, routeTrackList, paymentMethod } = useAppSelector(state => state.HomeSlice);
+    const { rideDetails, rideStatus, isLoading: makePaymentLoading, rideOtp: OTP, tipBtnOn, isTipConianerVisible } = useAppSelector(state => state.RideSlice);
 
     const { tokenDetail, userCordinates } = useAppSelector(state => state.AuthSlice);
-
+    const [selectPaymentMethod, setSelectPaymentMethod] = useState<string>(paymentMethod);
     const route = useRoute<RootRouteProps<'TrackDriverScreen'>>();
     const { rideId } = route.params;
     const bottomSheetRef = useRef<BottomSheet>(null);
     const [showBottomBtn, setShowBottomBtn] = useState<boolean>(false)
-    // const [snapPoint, setSnapPoint] = useState<string[]>([rideStatus === RIDE_STATUS.ENDRIDE ? "55%" : "33%"])
-    const [snapPoint, setSnapPoint] = useState<string[]>(["33%"])
+    // const [snapPoint, setSnapPoint] = useState<string[]>([rideStatus === RIDE_STATUS.ENDRIDE ? "60%" : "35%"])
+    const [snapPoint, setSnapPoint] = useState<string[]>(["35%", "35%"])
     const snapPoints = useMemo(() => snapPoint, [snapPoint]);
     const [riderLocation, setRiderLocation] = useState<CoordsTypes | undefined>(undefined);
     // const [driverLocation, setDriverLocation] = useState<CoordsTypes | undefined>(undefined);
@@ -118,7 +122,7 @@ const TrackDriverScreen = () => {
     const [duration, setDuration] = useState<number | undefined>(undefined);
     const [directionCoords, setDirectionCoords] = useState<CoordsTypes[] | undefined>(undefined)
     const [isVisibleSosBtn, setIsVisibleSosBtn] = useState<boolean>(true)
-    const [online, setOnline] = useState<string>('off');
+    const [online, setOnline] = useState<string>(isTipConianerVisible ? 'on' : 'off');
     const onlineRef = useRef(null)
     const [isQrCodeScannerModalOpen, setIsQrCodeScannerModalOpen] = useState<boolean>(false)
     const [isPressShareBtn, setIsPressShareBtn] = useState<boolean>(false);
@@ -135,8 +139,8 @@ const TrackDriverScreen = () => {
     const [userRegionDelta, setUserRegionDelta] = useState<RegionDeltaProps>({ latitudeDelta: 0.015, longitudeDelta: 0.0121 })
     const [isVisibleWaitingPaymentModal, setIsVisibleWaitingPaymentModal] = useState<boolean>(false)
     const { t } = useTranslation();
-    const { paymentMethod } = useAppSelector(state => state.HomeSlice)
-
+    const [isBtnDisable, setIsBtnDisable] = useState(false)
+    const [sheetIndex, setSheetIndex] = useState(0);
     useEffect(() => {
         // setTimeout(() => {
         //     setOnline(tipBtnOn ? 'on' : 'off')
@@ -185,7 +189,7 @@ const TrackDriverScreen = () => {
     const appState2 = useMemo(() => appState, [appState]);
 
     const url = `${RIDE_DETAILS}${rideId}/`
-    let ws: WebSocket
+    const ws = useRef<WebSocket>()
 
     useEffect(() => {
         if (focus) {
@@ -193,7 +197,7 @@ const TrackDriverScreen = () => {
             connectionInit()
         }
         return () => {
-            ws?.close()
+            ws?.current?.close()
             setModalVisible({
                 modalVisible: false,
                 type: ''
@@ -271,25 +275,67 @@ const TrackDriverScreen = () => {
         // } else {
         //     setIsVisibleSosBtn(true)
         // }
-        bottomSheetRef.current?.snapToIndex(0)
+        // bottomSheetRef.current?.snapToIndex(0)
+        setTimeout(() => {
+            bottomSheetRef.current?.expand();
+        }, 500);
+
     }, [rideStatus])
 
     useEffect(() => {
         onlineRef.current = online
         // dispatch(setTipBtnOn(online == "on"))
-        if (rideDetails?.rideStatus == RIDE_STATUS.ONGOING) {
-            setSnapPoint((online == "on" || onlineRef?.current == "on") ? ["45%", "90%"] : store.getState().PaymentSlice.isPaymentBeforeAfter ? ["45%", "55%"] : ["45%", "68%"])
+        if (rideDetails?.rideStatus == RIDE_STATUS.DRIVER_ALLOCATED) {
+            setSnapPoint(["35%", "35%"])
+        } else if (rideDetails?.rideStatus == RIDE_STATUS.ONGOING || rideDetails?.rideStatus == RIDE_STATUS.DRIVER_ENDED) {
+            setSnapPoint((online == "on" || onlineRef?.current == "on") ? ["45%", "85%"] : store.getState().PaymentSlice.isPaymentBeforeAfter?.takePaymentBeforeRide ? ["45%", "60%"] : store.getState().RideSlice.isTipConianerVisible ? ["45%", "85%"] : ["50%", "68%"])
             if (online == "on") {
-                bottomSheetRef.current?.snapToIndex(1)
+                setTimeout(() => {
+                    try {
+                        bottomSheetRef.current?.expand()
+                        bottomSheetRef.current?.snapToIndex(1)
+                    } catch (e) {
+                        throw new Error("App crash when open track driver bottom sheet- online");
+                    }
+                }, 2000);
+            } else {
+                if (ws?.current?.readyState === WebSocket.OPEN) {
+                    ws?.current?.send(JSON.stringify({
+                        event: 'update_tip_amount',
+                        tip_amount: 0,
+                    }));
+                }
             }
         }
     }, [online])
 
     useEffect(() => {
-        if (rideDetails?.rideStatus == RIDE_STATUS.ONGOING) {
-            setSnapPoint((online == "on" || onlineRef?.current == "on") ? ["45%", "90%"] : store.getState().PaymentSlice.isPaymentBeforeAfter ? ["45%", "55%"] : ["45%", "68%"])
+        if (rideDetails?.rideStatus == RIDE_STATUS.DRIVER_ALLOCATED) {
+            setSnapPoint(["35%", "35%"])
+            setTimeout(() => {
+                bottomSheetRef.current?.expand();
+            }, 500);
+        } else if (rideDetails?.rideStatus == RIDE_STATUS.ONGOING || rideDetails?.rideStatus == RIDE_STATUS.DRIVER_ENDED) {
+            setSheetIndex(1)
+            setSnapPoint((online == "on" || onlineRef?.current == "on") ? ["45%", "85%"] : store.getState().PaymentSlice.isPaymentBeforeAfter?.takePaymentBeforeRide ? ["45%", "60%"] : store.getState().RideSlice.isTipConianerVisible ? ["45%", "85%"] : ["50%", "68%"])
+            // setTimeout(() => {
+            //     try {
+            //         bottomSheetRef.current?.snapToIndex(1)
+            //     } catch (e) {
+            //         throw new Error("App crash when open track driver bottom sheet- rideStatusa" + snapPoint);
+            //     }
+            // }, 2000);
         }
     }, [rideDetails?.rideStatus])
+
+    useEffect(() => {
+        if (ws?.current?.readyState === WebSocket.OPEN) {
+            ws?.current?.send(JSON.stringify({
+                event: 'update_tip_amount',
+                tip_amount: TipAmount,
+            }));
+        }
+    }, [store.getState().RideSlice?.customTip?.toString(), store.getState().RideSlice?.isTipAmount])
 
     useEffect(() => {
         LayoutAnimation.configureNext({ ...LayoutAnimation.Presets.easeInEaseOut, duration: 200 });
@@ -362,18 +408,18 @@ const TrackDriverScreen = () => {
     // }, [appState, rideDetails]);
 
     const connectionInit = () => {
-        ws = new WebSocket(url, null, {
+        ws.current = new WebSocket(url, null, {
             headers: {
                 Authorization: `Token ${tokenDetail?.authToken}`,
                 "Accept-Language": i18n.language
             }
         })
 
-        ws.onopen = () => {
+        ws.current.onopen = () => {
             console.log("CONNECTION OPEN");
         }
 
-        ws.addEventListener("error", (erorr) => {
+        ws?.current?.addEventListener("error", (erorr) => {
             console.log("CONNECTION ERROR", erorr.message, erorr);
             // if (ws?.readyState == SOCKET_STATUS.CLOSED && networkStatus) {
             //     setTimeout(() => {
@@ -383,18 +429,19 @@ const TrackDriverScreen = () => {
             setLoading(false)
         })
 
-        ws.addEventListener("open", () => {
+        ws?.current.addEventListener("open", () => {
             console.log("CONNECTION OPEN");
         })
 
-        ws.addEventListener("close", () => {
+        ws?.current.addEventListener("close", () => {
             console.log("CONNECTION CLOSE");
-            // if (focus && navigation.getId() == "TrackDriverScreen") {
-            //     setTimeout(connectionInit, 2000);
-            // }
+
+            if (focus && navigationRef.current?.getCurrentRoute()?.name == "TrackDriverScreen") {
+                setTimeout(connectionInit, 2000);
+            }
         })
 
-        ws.addEventListener('message', (message) => {
+        ws.current.addEventListener('message', (message) => {
             const msgDetails: SocketRideDetailsType = JSON.parse(message.data)
             const { rideBooking, driverLocation, rideBookingOtp } = msgDetails
             console.log("MESSAGE", message.data, driverLocation, rideBooking, rideBookingOtp);
@@ -423,7 +470,7 @@ const TrackDriverScreen = () => {
                     setDirectionCoords(coordinates)
                 }
                 if (rideStatus !== RIDE_STATUS.ENDRIDE) {
-                    if (rideStatus === undefined || rideStatus === RIDE_STATUS.DRIVER_ALLOCATED || rideStatus === RIDE_STATUS.ONGOING) {
+                    if (rideStatus === undefined || rideStatus === RIDE_STATUS.DRIVER_ALLOCATED || rideStatus === RIDE_STATUS.ONGOING || rideStatus === RIDE_STATUS.DRIVER_ENDED) {
                         dispatch(setRideStatusReducer(rideBooking.rideStatus))
                     }
                 }
@@ -452,22 +499,27 @@ const TrackDriverScreen = () => {
                 //     }, 1000)
                 // }
 
-                if (rideBooking?.rideStatus === RIDE_STATUS.CANCELLED && allowLocation) {
+                if (rideBooking?.rideStatus === RIDE_STATUS.CANCELLED) {
                     setIsVisibleWaitingPaymentModal(false)
                     // dispatch(resetRideOtpReducer())
-                    dispatch(setRideStatusReducer(undefined))
-                    setModalVisible({
-                        modalVisible: true,
-                        type: 'RideCancel'
-                    })
+                    setTimeout(() => {
+                        setModalVisible({
+                            modalVisible: true,
+                            type: 'RideCancel'
+                        })
+                        dispatch(setRideStatusReducer(undefined))
+                    }, 200);
+                    dispatch(setPaymentMethod("Card"))
                 } else if (rideBooking?.rideStatus === RIDE_STATUS.COMPLETED && (rideBooking.ridePayment.paymentMethod === PAYMENT_METHOD.CASH || rideBooking.ridePayment.paymentMethod === PAYMENT_METHOD.UPI || rideBooking.ridePayment.paymentMethod === "CARD") && allowLocation) {
                     setIsVisibleWaitingPaymentModal(false)
-                    dispatch(setRideStatusReducer(undefined))
                     // dispatch(resetRideOtpReducer())
-                    setModalVisible({
-                        modalVisible: true,
-                        type: 'PaymentSuccess'
-                    })
+                    setTimeout(() => {
+                        setModalVisible({
+                            modalVisible: true,
+                            type: 'PaymentSuccess'
+                        })
+                        dispatch(setRideStatusReducer(undefined))
+                    }, 200);
                 } else {
                     // setDriverLocation(driverCoords)
                     nearByLocation()
@@ -489,7 +541,7 @@ const TrackDriverScreen = () => {
             //     console.log("🚀 ~ file: TrackDriverScreen.tsx:182 ~ Geolocation.getCurrentPosition ~ error:", error)
             // })
         }
-        else if (rideStatusData === RIDE_STATUS.ONGOING && driverLocationRef?.current) {
+        else if ((rideStatusData === RIDE_STATUS.ONGOING || rideStatusData === RIDE_STATUS.DRIVER_ENDED) && driverLocationRef?.current) {
             if (rideDetailsData?.rideLocation?.destination) {
                 checkUserIsNearByOrNot(0)
                 // getDistanceFromLatLonInKm(driverLocationRef?.current, {
@@ -507,8 +559,8 @@ const TrackDriverScreen = () => {
 
     const checkUserIsNearByOrNot = (km?: number) => {
         const { rideStatus: rideStatusData, rideDetails: rideDetailsData } = store.getState().RideSlice
-        if (rideDetailsData?.rideStatus == RIDE_STATUS.ONGOING) {
-            setSnapPoint((online == "on" || onlineRef?.current == "on") ? ["45%", "90%"] : store.getState().PaymentSlice.isPaymentBeforeAfter ? ["45%", "55%"] : ["45%", "68%"])
+        if (rideDetailsData?.rideStatus == RIDE_STATUS.ONGOING || rideDetailsData?.rideStatus == RIDE_STATUS.DRIVER_ENDED) {
+            setSnapPoint((online == "on" || onlineRef?.current == "on") ? ["45%", "85%"] : store.getState().PaymentSlice.isPaymentBeforeAfter?.takePaymentBeforeRide ? ["45%", "60%"] : store.getState().RideSlice.isTipConianerVisible ? ["45%", "85%"] : ["50%", "68%"])
         } else {
             dispatch(setRideStatusReducer(rideDetailsData?.rideStatus))
         }
@@ -719,6 +771,7 @@ const TrackDriverScreen = () => {
     //     }
     // };
     const initializePayment = (tip: number, payment_type: string, totalAmount: number) => {
+        setIsBtnDisable(true)
         const data = new FormData()
         data.append("payment_type", payment_type.toUpperCase())
         data.append("tip_amount", tip)
@@ -730,8 +783,9 @@ const TrackDriverScreen = () => {
             rideId: rideId,
             formData: data
         }
-        if (rideDetails?.rideStatus === RIDE_STATUS.ONGOING && store.getState().PaymentSlice.isPaymentBeforeAfter?.takePaymentBeforeRide && rideDetails?.ridePayment?.paymentMethod === "CARD") {
+        if ((rideDetails?.rideStatus === RIDE_STATUS.ONGOING || rideDetails?.rideStatus === RIDE_STATUS.DRIVER_ENDED) && store.getState().PaymentSlice.isPaymentBeforeAfter?.takePaymentBeforeRide && rideDetails?.ridePayment?.paymentMethod === "CARD") {
             dispatch(endRideCardPayment(rideDetails?.id)).unwrap().then((response) => {
+                setIsBtnDisable(false)
                 setIsQrCodeScannerModalOpen(false)
                 setTimeout(() => {
                     setModalVisible({
@@ -739,11 +793,14 @@ const TrackDriverScreen = () => {
                         type: 'PaymentSuccess'
                     })
                 }, 500);
+            }).catch((e: any) => {
+                setIsBtnDisable(false)
             })
         } else {
             dispatch(makeRidePayment(params)).unwrap()
                 .then(res => {
                     if (res?.paymentMethod === "UPI") {
+                        setIsBtnDisable(false)
                         setIsQrCodeScannerModalOpen(true)
                     } else if (res?.payment?.paymentMethod == "CARD" && !store.getState().PaymentSlice.isPaymentBeforeAfter?.takePaymentBeforeRide) {
                         var options = {
@@ -772,6 +829,7 @@ const TrackDriverScreen = () => {
                             }
                         }
                         RazorpayCheckout.open(options as any).then((data: { razorpay_payment_id: any; }) => {
+                            setIsBtnDisable(false)
                             console.log("🚀  file: SelectPaymentModeScreen.tsx:163  RazorpayCheckout.open ~ data:", data)
                             // handle success
                             // Alert.alert(`Success: ${data.razorpay_payment_id}`);
@@ -786,6 +844,7 @@ const TrackDriverScreen = () => {
 
                         }).catch((error: { code: any; description: any; }) => {
                             // handle failure
+                            setIsBtnDisable(false)
                             if (error.code === 0) {
                                 AppAlert(t(TranslationKeys.Message), 'Cancelled by user')
                             } else {
@@ -793,12 +852,16 @@ const TrackDriverScreen = () => {
                             };
                         });
                     } else {
+                        setIsBtnDisable(false)
                         setIsQrCodeScannerModalOpen(false)
                         setIsVisibleWaitingPaymentModal(true)
                         // AppAlert("Note!", "Waiting for driver's payment approval", () => { })
                     }
                     console.log({ res })
-                }).catch(e => { console.log({ e }) })
+                }).catch(e => {
+                    console.log({ e })
+                    setIsBtnDisable(false)
+                })
         }
     }
 
@@ -858,22 +921,113 @@ const TrackDriverScreen = () => {
         }
         return 0;
     };
+
+    const onChangePayment = () => {
+        if (ws?.current?.readyState === WebSocket.OPEN) {
+            ws?.current?.send(JSON.stringify({
+                event: 'change_payment_method',
+                new_payment_method: selectPaymentMethod === "Card" ? "CARD" : 'CASH',
+            }));
+        }
+        dispatch(setPaymentMethod(selectPaymentMethod))
+    }
+    const [isBtnDiabled, setIsBtnDiabled] = useState(false)
     const isRideBefore = store.getState().PaymentSlice.isPaymentBeforeAfter?.takePaymentBeforeRide
+    const isBeforeWithCard = store.getState().PaymentSlice.isPaymentBeforeAfter?.takePaymentBeforeRide && paymentMethod == "Card"
+    const TipAmount = online == "on" ? store.getState().RideSlice?.customTip?.toString() !== "" ? store.getState().RideSlice?.customTip?.toString() : store.getState().RideSlice?.isTipAmount : 0
+    const paymentAmount = (Number(rideDetails?.ridePayment?.totalFare))
+
+    // const renderFooter = useCallback(
+    //     (props: React.JSX.IntrinsicAttributes & BottomSheetDefaultFooterProps) => {
+    //         // if (sheetIndex === 0) return null;
+    //         if (rideDetails?.rideStatus !== RIDE_STATUS.ONGOING && rideDetails?.rideStatus !== RIDE_STATUS.DRIVER_ENDED) return null;
+    //         return (
+    //             <BottomSheetFooter {...props} bottomInset={0} style={{ backgroundColor: colors.SECONDARY_BACKGROUND }}>
+    //                 <View style={{
+    //                     paddingHorizontal: wp(6),
+    //                     paddingBottom: wp(2),
+    //                 }}>
+    //                     <TouchableOpacity
+    //                         disabled={(!isBeforeWithCard && (isBtnDiabled || rideDetails?.rideStatus !== RIDE_STATUS.DRIVER_ENDED)) || isBtnDisable}
+    //                         onPress={() => {
+    //                             setIsBtnDiabled(true)
+    //                             if (rideDetails?.ridePayment?.paymentStatus !== PAYMENT_METHOD.UPI && rideDetails?.ridePayment.paymentStatus === RIDE_STATUS.COMPLETED && rideDetails?.id) {
+    //                                 navigation.navigate('RateDriverScreen', { rideId: rideDetails?.id })
+    //                                 setIsBtnDiabled(false)
+    //                             } else {
+    //                                 if (rideDetails?.id) {
+    //                                     // stripe open
+    //                                     initializePayment(store.getState().RideSlice.isTipAmount !== 0 ? (store.getState().RideSlice.isTipAmount) : store.getState().RideSlice.customTip != '' ? store.getState().RideSlice.customTip : 0, paymentMethod, rideDetails?.ridePayment?.totalFare ?? 0)
+    //                                     setIsBtnDiabled(false)
+    //                                 }
+    //                             }
+    //                         }}
+    //                         style={[GlobalStyles.primaryBtnStyle, { flexDirection: 'row', marginBottom: 0, backgroundColor: !isBeforeWithCard && (isBtnDiabled || props.rideStatus !== RIDE_STATUS.DRIVER_ENDED) ? colors.SECONDARY_DOTTED_BORDER : colors.PRIMARY }]}>
+    //                         <Image source={Icons.CARD} style={Styles.makePaymentIcon} />
+    //                         {(rideDetails?.rideStatus === RIDE_STATUS.ONGOING || rideDetails?.rideStatus == RIDE_STATUS.DRIVER_ENDED) && store.getState().PaymentSlice.isPaymentBeforeAfter?.takePaymentBeforeRide && rideDetails?.ridePayment?.paymentMethod === "CARD" ? <Text style={Styles.makePaymentText}>{rideDetails?.deliveryDetails ? t(TranslationKeys.end_delivery) : t(TranslationKeys.end_ride)}</Text>
+    //                             :
+    //                             <Text style={Styles.makePaymentText}>{t(TranslationKeys.pay) + " " + `${setPrice(t, 0, true, true)}` + ' ' + paymentAmount.toFixed(2)}</Text>
+    //                         }
+    //                     </TouchableOpacity>
+    //                 </View>
+    //             </BottomSheetFooter>
+    //         )
+    //     },
+    //     [rideDetails]
+    // );
+
+    const renderFooter = (props: any, rideDetails: any) => {
+        // if (sheetIndex === 0) return null;
+        if (rideDetails?.rideStatus !== RIDE_STATUS.ONGOING && rideDetails?.rideStatus !== RIDE_STATUS.DRIVER_ENDED) return null;
+        return (
+            <BottomSheetFooter {...props} bottomInset={0} style={{ backgroundColor: colors.SECONDARY_BACKGROUND }}>
+                <View style={{
+                    paddingHorizontal: wp(6),
+                    paddingBottom: wp(2),
+                }}>
+                    <TouchableOpacity
+                        disabled={(!isBeforeWithCard && (isBtnDiabled || rideDetails?.rideStatus !== RIDE_STATUS.DRIVER_ENDED)) || isBtnDisable}
+                        onPress={() => {
+                            setIsBtnDiabled(true)
+                            if (rideDetails?.ridePayment?.paymentStatus !== PAYMENT_METHOD.UPI && rideDetails?.ridePayment.paymentStatus === RIDE_STATUS.COMPLETED && rideDetails?.id) {
+                                navigation.navigate('RateDriverScreen', { rideId: rideDetails?.id })
+                                setIsBtnDiabled(false)
+                            } else {
+                                if (rideDetails?.id) {
+                                    // stripe open
+                                    initializePayment(store.getState().RideSlice.isTipAmount !== 0 ? (store.getState().RideSlice.isTipAmount) : store.getState().RideSlice.customTip != '' ? store.getState().RideSlice.customTip : 0, paymentMethod, rideDetails?.ridePayment?.totalFare ?? 0)
+                                    setIsBtnDiabled(false)
+                                }
+                            }
+                        }}
+                        style={[GlobalStyles.primaryBtnStyle, { flexDirection: 'row', marginBottom: 0, backgroundColor: ((!isBeforeWithCard && (isBtnDiabled || rideDetails?.rideStatus !== RIDE_STATUS.DRIVER_ENDED)) || isBtnDisable) ? colors.SECONDARY_DOTTED_BORDER : colors.PRIMARY }]}>
+                        <Image source={Icons.CARD} style={Styles.makePaymentIcon} />
+                        {(rideDetails?.rideStatus === RIDE_STATUS.ONGOING || rideDetails?.rideStatus == RIDE_STATUS.DRIVER_ENDED) && store.getState().PaymentSlice.isPaymentBeforeAfter?.takePaymentBeforeRide && rideDetails?.ridePayment?.paymentMethod === "CARD" ? <Text style={Styles.makePaymentText}>{rideDetails?.deliveryDetails ? t(TranslationKeys.end_delivery) : t(TranslationKeys.end_ride)}</Text>
+                            :
+                            <Text style={Styles.makePaymentText}>{t(TranslationKeys.pay) + " " + `${setPrice(t, 0, true, true)}` + ' ' + paymentAmount.toFixed(2)}</Text>
+                        }
+                    </TouchableOpacity>
+                </View>
+            </BottomSheetFooter>
+        )
+    }
 
     return (
         <SafeAreaView edges={['top']} style={GlobalStyles.container}>
-            {(isLoading || loading || makePaymentLoading || !directionCoords || !driverLocationRef.current) ? <ActivityIndicator
-                style={{
-                    position: 'absolute',
-                    top: 0,
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    backgroundColor: colors.SHADOW_2,
-                }}
-                color={colors.SECONDARY_BACKGROUND}
-                size={'large'}
-            /> : null}
+            {(isLoading || loading || makePaymentLoading || !directionCoords || !driverLocationRef || !rideDetails) ?
+                <ActivityIndicator
+                    style={{
+                        position: 'absolute',
+                        top: 0,
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        zIndex: 999999999999999,
+                        backgroundColor: colors.SHADOW_2,
+                    }}
+                    color={colors.SECONDARY_BACKGROUND}
+                    size={'large'}
+                /> : null}
             {
                 !allowLocation ?
                     <ReactNativeModal
@@ -895,9 +1049,10 @@ const TrackDriverScreen = () => {
                 <CustomIconButton
                     onPress={() => {
                         if (showBottomBtn) {
-                            setSnapPoint(["33%"])
+                            setSnapPoint(["35%", "35%"])
                             setShowBottomBtn(false)
-                            bottomSheetRef.current?.snapToIndex(0)
+                            bottomSheetRef.current?.expand();
+                            // bottomSheetRef.current?.snapToIndex(0)
                         } else {
                             navigation.goBack()
                         }
@@ -985,6 +1140,8 @@ const TrackDriverScreen = () => {
                             <Polyline
                                 coordinates={livePointRef?.current}
                                 strokeWidth={3}
+                                fillColor={colors.SECONDARY_ICON}
+                                strokeColor={colors.SECONDARY_ICON}
                             /> : null
                         }
                         {!!directionCoords && directionCoords?.length !== 0 && location?.length != 0 && (
@@ -995,6 +1152,7 @@ const TrackDriverScreen = () => {
                                     // directionCoords[directionCoords?.length - 1],
                                 ]}
                                 strokeWidth={3}
+                                fillColor={colors.SECONDARY_ICON}
                                 strokeColor={colors.SECONDARY_ICON}
                                 {...(Platform.OS === "android" ? { lineDashPattern: [2, 2] } : {})}
                             />
@@ -1018,7 +1176,7 @@ const TrackDriverScreen = () => {
 
                 {/* ongoing destination marker */}
                 {
-                    rideDetails?.rideStatus === RIDE_STATUS.ONGOING ?
+                    (rideDetails?.rideStatus === RIDE_STATUS.ONGOING || rideDetails?.rideStatus === RIDE_STATUS.DRIVER_ENDED) ?
                         <>
                             {location?.map((item, index) => {
                                 // if (index == 0) {
@@ -1076,6 +1234,8 @@ const TrackDriverScreen = () => {
                             {!!livePointRef?.current && <Polyline
                                 coordinates={livePointRef?.current}
                                 strokeWidth={3}
+                                fillColor={colors.SECONDARY_ICON}
+                                strokeColor={colors.SECONDARY_ICON}
                             />}
                             {!!directionCoords && directionCoords?.length !== 0 && location?.length != 0 && (
                                 <Polyline
@@ -1085,6 +1245,7 @@ const TrackDriverScreen = () => {
                                         // directionCoords[directionCoords?.length - 1],
                                     ]}
                                     strokeWidth={3}
+                                    fillColor={colors.SECONDARY_ICON}
                                     strokeColor={colors.SECONDARY_ICON}
                                     {...(Platform.OS === "android" ? { lineDashPattern: [2, 2] } : {})}
                                 />
@@ -1110,8 +1271,8 @@ const TrackDriverScreen = () => {
                             modalVisible?.type === "RideCancel"
                                 ?
                                 <>
-                                    <Text style={Styles.headingText}>{t(TranslationKeys.booking_Cancelled)}</Text>
-                                    <Text style={[GlobalStyles.subTitleStyle, Styles.subtitleText]}>{t(TranslationKeys.cancellation_statement)}&nbsp;{rideDetails?.rideCancelBy?.reason}</Text>
+                                    <Text style={Styles.headingText}>{rideDetails?.rideCancelBy?.isDisputed ? t(TranslationKeys.booking_disputed) : t(TranslationKeys.booking_Cancelled)}</Text>
+                                    <Text style={[GlobalStyles.subTitleStyle, Styles.subtitleText]}>{rideDetails?.rideCancelBy?.isDisputed ? t(TranslationKeys.disputed_statement) : t(TranslationKeys.cancellation_statement)}&nbsp;{rideDetails?.rideCancelBy?.reason}</Text>
                                 </>
                                 : null
                         }
@@ -1130,6 +1291,9 @@ const TrackDriverScreen = () => {
                         dispatch(setRideStatusReducer(undefined))
                         dispatch(resetRideOtpReducer())
                         dispatch(setPaymentMethod("Card"))
+                        dispatch(setTipConatinerVisible(false))
+                        dispatch(setTipAmount(0))
+                        dispatch(setCustomTip(''))
                         if (modalVisible?.type === "RideCancel") {
                             navigation.reset({
                                 index: 0,
@@ -1193,6 +1357,7 @@ const TrackDriverScreen = () => {
             />
             <TouchableOpacity style={[Styles.floatingChatBtnContainer, { bottom: "60%", }]}
                 onPress={() => {
+                    dispatch(setRideDetailsData(undefined));
                     (rideDetails?.id && rideDetails?.driver) && navigation.navigate('ChatScreen', {
                         roomId: rideDetails?.id,
                         userDetails: {
@@ -1245,16 +1410,21 @@ const TrackDriverScreen = () => {
                 <Image source={Icons.SHARE_ICON} style={Styles.infoIconStyle} />
                 <Text numberOfLines={1} style={Styles.fareTxtStyle}>{t(TranslationKeys.share_live_location)}</Text>
             </TouchableOpacity>
+            {console.log("rideStatus-->", snapPoint)}
             <CustomBottomSheet
                 ref={bottomSheetRef}
-                snapPoints={snapPoints}
-                key={`key${rideDetails?.rideStatus === RIDE_STATUS.ONGOING}`}
-                index={(snapPoints && snapPoints?.length > 1 && rideDetails?.rideStatus === RIDE_STATUS.ONGOING) ? 1 : 0}
+                snapPoints={snapPoint}
+                index={0}
                 enablePanDownToClose={false}
+                footerComponent={(props) => renderFooter(props, rideDetails)}
                 animateOnMount={false}
                 keyboardBlurBehavior='restore'
                 overDragResistanceFactor={0.5}
+                enableOverDrag={rideStatus == RIDE_STATUS.DRIVER_ALLOCATED ? false : true}
+                enableDynamicSizing={rideStatus == RIDE_STATUS.DRIVER_ALLOCATED ? false : true}
+                containerStyle={{ zIndex: 7 }}
                 onChange={(index) => {
+                    setSheetIndex(index)
                     if (index == 0) {
                         setIsVisibleSosBtn(true)
                     } else {
@@ -1262,21 +1432,29 @@ const TrackDriverScreen = () => {
                     }
                 }}
             >
-                <TrackDriverBottomSheetComponent onPayment={(tip, payment_type, totalAmount) => {
-                    // initializePaymentSheet()
-                    initializePayment(tip, payment_type, totalAmount)
-                }}
-                    onMarkerPress={() => {
-                        navigateToGoogleMap()
+                <BottomSheetScrollView nestedScrollEnabled style={{ backgroundColor: colors.TRANSPARENT, flex: 1 }}
+                    showsVerticalScrollIndicator={false}>
+
+                    <TrackDriverBottomSheetComponent onPayment={(tip, payment_type, totalAmount) => {
+                        // initializePaymentSheet()
+                        initializePayment(tip, payment_type, totalAmount)
                     }}
-                    duration={duration}
-                    isVisibleSosBtn={isVisibleSosBtn}
-                    rideOtp={OTP?.toString()}
-                    rideStatus={rideStatus}
-                    rideBooking={rideDetails}
-                    enableTip={online}
-                    setEnableTip={setOnline}
-                />
+                        isDisable={isBtnDisable}
+                        onMarkerPress={() => {
+                            navigateToGoogleMap()
+                        }}
+                        duration={duration}
+                        isVisibleSosBtn={isVisibleSosBtn}
+                        rideOtp={OTP?.toString()}
+                        rideStatus={rideStatus}
+                        rideBooking={rideDetails}
+                        enableTip={online}
+                        setEnableTip={setOnline}
+                        onChangePayment={onChangePayment}
+                        setSelectPaymentMethod={setSelectPaymentMethod}
+                        selectPaymentMethod={selectPaymentMethod}
+                    />
+                </BottomSheetScrollView>
             </CustomBottomSheet>
             <Modal visible={isQrCodeScannerModalOpen} onRequestClose={() => setIsQrCodeScannerModalOpen(false)}>
                 <QrCodeScannerScreen codeScanner={codeScanner} />
@@ -1556,6 +1734,18 @@ const useStyles = () => {
                 width: wp(6),
                 height: wp(6),
                 resizeMode: 'contain'
+            },
+            makePaymentIcon: {
+                height: wp(6),
+                width: wp(6),
+                resizeMode: 'contain',
+                tintColor: colors.WHITE_ICON,
+                marginRight: wp(5)
+            },
+            makePaymentText: {
+                fontFamily: Fonts.FONT_POP_SEMI_BOLD,
+                fontSize: FontSizes.FONT_SIZE_18,
+                color: colors.WHITE_ICON
             }
         })
     );

@@ -28,13 +28,20 @@ import 'moment/locale/ar';
 import 'moment/locale/en-gb';
 import 'moment/locale/hi';
 import { useLanguage } from '../context/LanguageContext';
+import { LayoutAnimation } from 'react-native';
 
 interface CommonRideDetailsContainerProps {
     data: RideBookingListDetailsTypes,
     type?: string,
-    onClose: () => void,
+    onClose?: () => void,
     onCancel: () => void,
-    onNavigateToPrebook: () => void
+    onNavigateToPrebook: () => void,
+    isexpandMore: number | null,
+    setIsExpandMore: Dispatch<SetStateAction<number | null>>,
+    index?: undefined | number,
+    flatlistref?: any,
+    isPickModeContainer?: boolean
+    isLengthOne?: boolean
 };
 
 const CommonActiveRidePopUp = (props: CommonRideDetailsContainerProps) => {
@@ -61,9 +68,9 @@ const CommonActiveRidePopUp = (props: CommonRideDetailsContainerProps) => {
     const getFormattedDate = () => {
         moment.locale(langCode);
     }
-    useEffect(()=>{
+    useEffect(() => {
         getFormattedDate()
-    },[])
+    }, [])
 
     const renderItem = ({ item, index }: { item: RideLocationTypes, index: number }) => {
         return (
@@ -92,20 +99,35 @@ const CommonActiveRidePopUp = (props: CommonRideDetailsContainerProps) => {
         );
     };
 
+    const dropDown = () => {
+        if (props.isexpandMore === props?.data?.id) {
+            props.setIsExpandMore(0)
+        } else {
+            props?.setIsExpandMore(props?.data?.id)
+        }
+        props?.flatlistref?.current.scrollToIndex({ animated: true, index: props.index, viewPosition: 0.5, viewOffset: wp(5), })
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
+    const isDispute = (props.data?.rideStatus == RIDE_STATUS.ONGOING || props.data?.rideStatus == RIDE_STATUS.DRIVER_ENDED)
+
     return (
-        <View style={[Styles.mainContainerStyle, Styles.mainContainerShadowStyle]} >
-            <TouchableOpacity onPress={props.onClose}>
+        <View>
+            {/* <TouchableOpacity onPress={props.onClose}>
                 <Image source={Icons.ROUND_CLOSE_ICON} style={Styles.commonRoundIconStyle2} />
             </TouchableOpacity>
-            <Text style={Styles.activeRideFoundtext}>{t(TranslationKeys.active_ride_found_c)}</Text>
+            <Text style={Styles.activeRideFoundtext}>{props?.data?.deliveryDetails ? t(TranslationKeys.active_delivery_found) :t(TranslationKeys.active_ride_found_c)}</Text> */}
             <CommonRideUserDetailView
                 userData={{
                     driver: props.data?.driver,
                     driverCar: props.data?.driverCar,
                     priceModel: props.data?.priceModel,
                     rideCancelBy: props?.data?.rideCancelBy,
+                    pickUpMode: props?.data?.pickupMode,
+                    deleteUser: props?.data?.deletedUser
                 }}
+                isHomeScreen={props.isPickModeContainer}
             />
+            <Text style={Styles.userNameTxtStyle}>{t(TranslationKeys.otp)} {props.data?.rideBookingOtp}</Text>
             <View style={Styles.commonItemSeprator} />
             <View style={[GlobalStyle.rowContainer, Styles.spaceBetweenView]}>
                 <CommonRideIconTextView icon={Icons.LOCATION_MARKER_BORDER} title={props.data?.distance + "km"} />
@@ -118,17 +140,17 @@ const CommonActiveRidePopUp = (props: CommonRideDetailsContainerProps) => {
                 }} title={t(TranslationKeys.date_and_time)}
                 subTitle={props?.data?.preBookedTime ? moment(props?.data?.preBookedTime).format('DD MMM YYYY | LT') : moment(props?.data?.createdAt).format('DD MMM YYYY | LT')} />
             {
-                props?.data?.id ?
+                props.isexpandMore == props?.data?.id ?
                     <>
                         <View style={Styles.commonItemSeprator} />
-                        <ScrollView
-                            nestedScrollEnabled showsVerticalScrollIndicator={false} style={Styles.locationContainerStyle}>
-                            {
-                                location?.map((item, index) => {
-                                    return renderItem({ item, index })
-                                })
-                            }
-                        </ScrollView>
+                        {/* <ScrollView
+                            nestedScrollEnabled showsVerticalScrollIndicator={false} style={Styles.locationContainerStyle}> */}
+                        {
+                            location?.map((item, index) => {
+                                return renderItem({ item, index })
+                            })
+                        }
+                        {/* </ScrollView> */}
                         {
                             props?.data?.driverCar && props?.data?.driverCar?.registrationNumber ?
                                 <>
@@ -140,9 +162,9 @@ const CommonActiveRidePopUp = (props: CommonRideDetailsContainerProps) => {
                                     <View style={Styles.commonItemSeprator} />
                                 </> : null
                         }
-                        {props.type === RIDE_TYPE.YOURRIDES && (props.data?.rideStatus === RIDE_STATUS.DRIVER_ALLOCATED || props.data?.rideStatus === RIDE_STATUS.ONGOING) ?
+                        {props.type === RIDE_TYPE.YOURRIDES && (props.data?.rideStatus === RIDE_STATUS.DRIVER_ALLOCATED || props.data?.rideStatus === RIDE_STATUS.ONGOING || props.data?.rideStatus === RIDE_STATUS.DRIVER_ENDED) ?
                             <>
-                                <CustomMapContainer
+                                {/* <CustomMapContainer
                                     region={{
                                         latitude: props?.data?.rideLocation?.pickup?.latitude,
                                         longitude: props?.data?.rideLocation?.pickup?.latitude,
@@ -175,17 +197,18 @@ const CommonActiveRidePopUp = (props: CommonRideDetailsContainerProps) => {
                                         strokeWidth={3}
                                         strokeColor={colors.SECONDARY}
                                         optimizeWaypoints={true}
-                                    /> */}
-                                </CustomMapContainer>
+                                    /> 
+                                </CustomMapContainer> */}
+
                                 <CustomPrimaryButton onPress={() => {
                                     // dispatch(assignRideDetails(props.data))
                                     props?.data?.id && navigation.navigate('TrackDriverScreen', { rideId: props?.data?.id })
                                 }} title={t(TranslationKeys.track_driver)} style={[GlobalStyle.primaryBtnStyle]} />
                                 <TouchableOpacity style={Styles.cancleRideBtnStyle}
                                     onPress={() => {
-                                        props?.data?.id && navigation.navigate('CancelTaxiScreen', { id: props?.data?.id })
+                                        props?.data?.id && navigation.navigate('CancelTaxiScreen', { id: props?.data?.id, isDispute: isDispute })
                                     }}>
-                                    <Text style={Styles.cancleRideTxtStyle}>{t(TranslationKeys.cancel_ride)}</Text>
+                                    <Text style={Styles.cancleRideTxtStyle}>{isDispute ? t(TranslationKeys.submit_for_dispute) : props?.data?.deliveryDetails ? t(TranslationKeys.cancel_delivery) : t(TranslationKeys.cancel_ride)}</Text>
                                 </TouchableOpacity>
                             </>
                             :
@@ -195,15 +218,15 @@ const CommonActiveRidePopUp = (props: CommonRideDetailsContainerProps) => {
                             props.type !== RIDE_TYPE.YOURRIDES
                                 ?
                                 <>
-                                    <View style={[GlobalStyle.rowContainer, Styles.buttonListContainerStyle]}>
-                                        <View style={{ alignItems: 'center' }}>
-                                            <CustomIconButton icon={Icons.ROUND_CLOSE_ICON} disabled={props.data?.rideStatus == RIDE_STATUS.ONGOING} iconStyle={{ tintColor: colors.WHITE_ICON }} style={[Styles.commonRoundIconStyle, { backgroundColor: props.data?.rideStatus == RIDE_STATUS.ONGOING ? colors.DISABLE_BUTTON : colors.PRIMARY }]} onPress={props.onCancel} />
-                                            <Text style={Styles.buttonTxt}>{t(TranslationKeys.cancel_trip)}</Text>
+                                    <View style={[GlobalStyle.rowContainer, Styles.buttonListContainerStyle, { alignItems: 'flex-start' }]}>
+                                        <View style={{ alignItems: 'center', width: wp(20) }}>
+                                            <CustomIconButton icon={Icons.ROUND_CLOSE_ICON} iconStyle={{ tintColor: colors.WHITE_ICON }} style={[Styles.commonRoundIconStyle, { backgroundColor: colors.PRIMARY }]} onPress={props.onCancel} />
+                                            <Text style={Styles.buttonTxt}>{isDispute ? t(TranslationKeys.submit_for_dispute) : props?.data?.deliveryDetails ? t(TranslationKeys.cancel_delivery) : t(TranslationKeys.cancel_trip)}</Text>
                                         </View>
 
                                         <View style={{ alignItems: 'center' }}>
                                             <CustomIconButton icon={Icons.LOCATION_MARKER_ICON} iconStyle={{ tintColor: colors.WHITE_ICON }} style={Styles.commonRoundIconStyle} onPress={props.onNavigateToPrebook} />
-                                            <Text style={Styles.buttonTxt}>{t(TranslationKeys.track_ride)}</Text>
+                                            <Text style={Styles.buttonTxt}>{props?.data?.deliveryDetails ? t(TranslationKeys.track_delivery) : t(TranslationKeys.track_ride)}</Text>
                                         </View>
                                     </View>
                                 </>
@@ -211,6 +234,12 @@ const CommonActiveRidePopUp = (props: CommonRideDetailsContainerProps) => {
                         }
                     </>
                     : null
+            }
+            {props?.isLengthOne ? null :
+                <CustomIconButton onPress={dropDown} icon={props?.isexpandMore === props?.data?.id ? Icons.UPARROW : Icons.DROPDOWN}
+                    style={Styles.bottomArrowIconContainerStyle}
+                    iconStyle={Styles.bottomArrowIconStyle}
+                />
             }
         </View>
     );
@@ -226,7 +255,7 @@ const useStyles = () => {
         commonItemSeprator: {
             backgroundColor: colors.SEPARATOR_LINE,
             height: wp(0.5),
-            marginVertical: wp(3.5),
+            marginVertical: wp(2.5),
             borderRadius: wp(2)
         },
         buttonTxt: {
@@ -235,7 +264,8 @@ const useStyles = () => {
             color: colors.SECONDARY_TEXT,
             maxWidth: wp(40),
             alignSelf: 'center',
-            marginTop: wp(1)
+            marginTop: wp(1),
+            textAlign: 'center'
         },
         mainContainerStyle: {
             backgroundColor: colors.SECONDARY_BACKGROUND,
@@ -291,10 +321,18 @@ const useStyles = () => {
         },
         buttonListContainerStyle: {
             justifyContent: "space-evenly",
-            marginTop: wp(5),
+            // marginTop: wp(2),
             marginHorizontal: wp(10),
-            marginBottom: wp(3),
+            // marginBottom: wp(3),
 
+        },
+        userNameTxtStyle: {
+            fontFamily: Fonts.FONT_POP_MEDIUM,
+            fontSize: FontSizes.FONT_SIZE_16,
+            color: colors.PRIMARY_TEXT,
+            textAlign: 'right',
+            marginTop: wp(1),
+            marginBottom: wp(-1)
         },
         listItemSepratorStyle: {
             backgroundColor: colors.SEPARATOR_LINE,

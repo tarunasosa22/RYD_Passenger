@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Platform, Image, StyleSheet, Text, TextInput, TouchableOpacity, View, Keyboard, ImageBackground } from 'react-native';
+import { FlatList, Platform, Image, StyleSheet, Text, TextInput, TouchableOpacity, View, Keyboard, ImageBackground, Alert } from 'react-native';
 import { Bubble, GiftedChat, IMessage, InputToolbar, BubbleProps, MessageText, InputToolbarProps, ComposerProps, Send, SendProps, LoadEarlierProps, LoadEarlier, } from 'react-native-gifted-chat';
 import { heightPercentageToDP, widthPercentageToDP as wp } from 'react-native-responsive-screen';
 import CustomHeader from '../../components/CustomHeader';
@@ -14,11 +14,11 @@ import { RootRouteProps } from '../../types/RootStackType';
 import { useIsFocused, useRoute } from '@react-navigation/native';
 import { CHAT_WEB_SOCKET } from '../../config/Host';
 import CustomActivityIndicator from '../../components/CustomActivityIndicator';
-import { SOCKET_STATUS, languageList } from '../../utils/Constats';
+import { RIDE_STATUS, SOCKET_STATUS, languageList } from '../../utils/Constats';
 import { changeChatLanguage, changeUserChatLanguage, messageListDetails, resetMessageList } from '../../redux/slice/chatSlice/ChatSlice';
 import { setAdjustPan, setAdjustResize } from 'rn-android-keyboard-adjust';
 import { contactToDriver } from '../../utils/HelperFunctions';
-import { hasDynamicIsland } from 'react-native-device-info';
+import DeviceInfo, { hasDynamicIsland } from 'react-native-device-info';
 import CustomTextInput from '../../components/CustomTextInput';
 import CustomContainer from '../../components/CustomContainer';
 import RBSheet from 'react-native-raw-bottom-sheet';
@@ -27,6 +27,14 @@ import { ImagesPaths } from '../../utils/ImagesPaths';
 import { useLanguage } from '../../context/LanguageContext';
 import { TranslationKeys } from '../../localization/TranslationKeys';
 import { useTranslation } from 'react-i18next';
+import { current } from '@reduxjs/toolkit';
+import { goBack, navigationRef } from '../../utils/NavigationServices';
+import { Modal } from 'react-native';
+import CustomBottomBtn from '../../components/CustomBottomBtn';
+import { setPaymentMethod } from '../../redux/slice/homeSlice/HomeSlice';
+import { resetRideOtpReducer, setRideStatusReducer } from '../../redux/slice/rideSlice/RideSlice';
+import { GiftedChatProps } from 'react-native-gifted-chat/lib/GiftedChat/types';
+import BottomSheet from '@gorhom/bottom-sheet';
 
 interface MessageProps {
     _id: number,
@@ -47,6 +55,11 @@ interface ChatListDetailsTypes {
 interface ChatSuggetionMessageProps {
     id: number,
     title: string
+};
+
+interface ModalTypes {
+    modalVisible: boolean,
+    type: string,
 };
 
 const ChatSuggetionMessage: ChatSuggetionMessageProps[] = [
@@ -76,20 +89,26 @@ const ChatScreen = () => {
     const route = useRoute<RootRouteProps<'ChatScreen'>>();
     const { roomId, userDetails } = route.params
     const [messages, setMessages] = useState<MessageProps[] | []>([]);
-    const chatRef = useRef<GiftedChat<MessageProps> | null>(null)
+    const chatRef = useRef<GiftedChatProps<MessageProps> | null>(null)
     const [loading, setLoading] = useState<boolean>(false);
     const dispatch = useAppDispatch();
     const [offset, setOffSet] = useState<number>(0)
     const [footerLoading, setFooterLoading] = useState<boolean>(false)
     const [searchLanguage, setSearchLanguage] = useState<string>('')
-    const bottomSheetRef = useRef<RBSheet>(null)
+    const bottomSheetRef = useRef<BottomSheet>(null)
     const focus = useIsFocused()
     const [isRead, setisRead] = useState(true)
     const [isChangeLanguage, setisChangeLanguage] = useState<any[]>(ChatSuggetionMessage)
     const [language, setlanguage] = useState(userDetail?.chatLanguageCode ?? '')
     const { t } = useTranslation();
     const url = `${CHAT_WEB_SOCKET}${roomId}/`
-    let ws: WebSocket
+    const ws = useRef<WebSocket>()
+    const [modalVisible, setModalVisible] = useState<ModalTypes>({
+        modalVisible: false,
+        type: ''
+    })
+    const [inputText, setInputText] = useState('');
+    const rideCancelReason = useRef<any>(null)
 
     useEffect(() => {
         connectionInit()
@@ -101,11 +120,15 @@ const ChatScreen = () => {
         getMessageList(params)
         setAdjustResize();
         return () => {
-            ws?.close()
+            ws?.current?.close()
             setOffSet(0)
             dispatch(resetMessageList())
             setAdjustPan()
             Keyboard.dismiss()
+            setModalVisible({
+                modalVisible: false,
+                type: ''
+            })
         }
     }, [])
 
@@ -187,8 +210,8 @@ const ChatScreen = () => {
                 let message: MessageProps = {
                     _id: item.id,
                     createdAt: item.createdAt,
-                    text: item.sender?.userMainId == userDetail?.user ? item?.senderText
-                        : item.recieverText,
+                    text: item.sender?.userMainId == userDetail?.user ? (item?.senderText ?? item.text)
+                        : (item.recieverText ?? item.text),
                     user: {
                         _id: item?.sender?.userMainId,
                         name: item?.sender?.name ?? "",
@@ -211,44 +234,40 @@ const ChatScreen = () => {
     }
 
     const connectionInit = () => {
-        ws = new WebSocket(url, null, {
+        ws.current = new WebSocket(url, null, {
             headers: {
                 Authorization: `Token ${tokenDetail?.authToken}`
             }
         })
 
-        ws.onopen = () => {
+        ws.current.onopen = () => {
             console.log("CONNECTION OPEN");
         }
 
-        ws.addEventListener("error", (erorr) => {
+        ws.current?.addEventListener("error", (erorr) => {
             console.log("CONNECTION ERROR", erorr);
-            if (ws?.readyState == SOCKET_STATUS.CLOSED && networkStatus) {
-                setTimeout(() => {
-                    connectionInit()
-                }, 5000);
-            }
+
             setLoading(false)
         })
 
-        ws.addEventListener("open", () => {
+        ws.current?.addEventListener("open", () => {
             console.log("CONNECTION OPEN");
             setisRead(false)
             if (isRead) {
-                ws?.send(JSON.stringify({ is_read: true }))
+                ws?.current?.send(JSON.stringify({ is_read: true }))
             }
         })
 
-        ws.addEventListener("close", () => {
+        ws.current?.addEventListener("close", () => {
             console.log("CONNECTION CLOSE");
-            if (focus) {
-                focus && setTimeout(connectionInit, 2000);
+            if (focus && navigationRef.current?.getCurrentRoute()?.name == "ChatScreen") {
+                setTimeout(connectionInit, 2000);
             }
-            ws?.send(JSON.stringify({ is_read: true }))
+            ws?.current?.send(JSON.stringify({ is_read: true }))
             setLoading(false)
         })
 
-        ws.addEventListener('message', (message) => {
+        ws.current.addEventListener('message', (message) => {
             console.log("MESSAGE", message.data);
             // ws?.send(JSON.stringify({ is_read: true }))
             const msgDetails = JSON.parse(message.data)
@@ -264,27 +283,48 @@ const ChatScreen = () => {
                     : (msgDetails.recieverText || msgDetails?.text),
                 createdAt: msgDetails.createdAt,
             }]
-            if(msgDetails?.id){
+            if (msgDetails?.id) {
                 setisRead(false)
-            if (isRead ) {
-                // console.log("read--->",isRead, msgDetails)
-                ws?.send(JSON.stringify({ is_read: true }))
-            }
+                if (isRead) {
+                    // console.log("read--->",isRead, msgDetails)
+                    ws?.current?.send(JSON.stringify({ is_read: true }))
+                }
                 setMessages(previousMessages => GiftedChat.append(previousMessages, msg))
+            }
+            rideCancelReason.current = { reason: msgDetails.reason, isDisputed: msgDetails.is_disputed }
+            if (msgDetails.ride_status === RIDE_STATUS.CANCELLED && msgDetails?.ride_booking_id) {
+                dispatch(setRideStatusReducer(undefined))
+                setModalVisible({
+                    modalVisible: true,
+                    type: 'RideCancel'
+                })
             }
         })
     };
 
     const onSend = useCallback((messages: IMessage[] = []) => {
         console.log("SEND--->", messages[0]?.text)
-        ws?.send(messages[0]?.text)
+        if (ws.current?.readyState == SOCKET_STATUS.OPEN) {
+            ws?.current?.send(messages[0]?.text)
+        } else {
+            Alert.alert(
+                t(TranslationKeys['warning!!']),
+                t(TranslationKeys.you_are_not_able_chat),
+                [
+                    {
+                        text: t(TranslationKeys.ok),
+                        onPress: () => { goBack() }
+                    }
+                ]);
+        }
     }, []);
 
     const renderItem = ({ item, index }: { item: ChatSuggetionMessageProps, index: number }) => {
         return (
             <TouchableOpacity
                 onPress={() => {
-                    chatRef?.current?.onInputTextChanged((item.title))
+                    setInputText(item.title)
+                    // chatRef?.current?.onInputTextChanged((item.title))
                 }}
                 style={Styles.renderFooterContainerStyle}>
                 <Text style={Styles.footerItemTxtStyle}>{item.title}</Text>
@@ -398,8 +438,8 @@ const ChatScreen = () => {
                         <TextInput
                             placeholder={t(TranslationKeys.type_a_message)}
                             placeholderTextColor={colors.SECONDARY_TEXT}
-                            value={data.text}
-                            onChangeText={data.onTextChanged}
+                            value={inputText}
+                            onChangeText={setInputText}
                             style={Styles.textInputStyle} />
                     )
                 }}
@@ -407,13 +447,39 @@ const ChatScreen = () => {
         );
     };
 
+
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+    useEffect(() => {
+        const keyboardDidShowListener = Keyboard.addListener(
+            "keyboardDidShow",
+            event => {
+                setKeyboardHeight(event.endCoordinates.height);
+            },
+        );
+
+        const keyboardDidHideListener = Keyboard.addListener(
+            "keyboardDidHide",
+            () => {
+                setKeyboardHeight(0);
+            },
+        );
+
+        return () => {
+            keyboardDidShowListener.remove();
+            keyboardDidHideListener.remove();
+        };
+    }, []);
+
+    const isNotch = DeviceInfo.hasNotch();
+
     return (
         <View style={[GlobalStyle.container, { backgroundColor: colors.SECONDARY_BACKGROUND }]}>
             {(loading || isLoading) ? <CustomActivityIndicator /> : null}
             <CustomHeader
-                headerStyle={{
-                    backgroundColor: colors.SECONDARY_BACKGROUND
-                }}
+                // headerStyle={{
+                //     backgroundColor: colors.SECONDARY_BACKGROUND
+                // }}
                 onPress={() => {
                     navigation.goBack()
                 }} title={userDetails?.name}
@@ -450,8 +516,10 @@ const ChatScreen = () => {
                     renderBubble={renderBubble}
                     renderChatFooter={renderChatFooter}
                     renderSend={renderSend}
+                    text={inputText}
+                    onInputTextChanged={setInputText}
                     minInputToolbarHeight={wp(20)}
-                    bottomOffset={Platform.OS == "ios" ? wp(8) : 0}
+                    // bottomOffset={Platform.OS == "ios" ? isNotch ? wp(8) : 0 : 0}
                     renderAvatar={() => null}
                     showAvatarForEveryMessage={true}
                     alwaysShowSend
@@ -476,7 +544,11 @@ const ChatScreen = () => {
                                 setFooterLoading(false)
                             }
                         },
-                        contentContainerStyle: Styles.giftedChatContentContainerStyle,
+                        contentContainerStyle: {
+                            flexGrow: 1,
+                            justifyContent: "flex-start",
+                            paddingBottom: keyboardHeight,
+                        },
                     }}
                     isLoadingEarlier={footerLoading}
                     loadEarlier={footerLoading}
@@ -502,7 +574,7 @@ const ChatScreen = () => {
             >
                 <CustomContainer style={{ paddingVertical: wp(5) }}>
                     <CustomTextInput
-                        placeholder={"Choose your language"}
+                        placeholder={t(TranslationKeys.choose_your_language)}
                         value={searchLanguage}
                         onChangeText={(text) => {
                             setSearchLanguage(text)
@@ -518,6 +590,43 @@ const ChatScreen = () => {
                         keyExtractor={(item, index) => index?.toString()} />
                 </CustomContainer>
             </RBSheet>
+            {(modalVisible.modalVisible) ?
+                <Modal
+                    animationType="slide"
+                    transparent={false}
+                    visible={modalVisible.modalVisible}>
+                    <View style={[GlobalStyle.centerContainer, { flex: 1 }]}>
+                        <Image
+                            source={modalVisible?.type === "RideCancel" ? Icons.CANCELTAXIICON : Icons.CHECKBOX}
+                            style={[Styles.completedIcon, {
+                                tintColor: (modalVisible?.type === "RideCancel") ? colors.ERROR_TEXT : undefined
+                            }]} />
+                        {
+                            modalVisible?.type === "RideCancel"
+                                ?
+                                <>
+                                    <Text style={Styles.headingText}>{rideCancelReason?.current?.isDisputed ? t(TranslationKeys.booking_disputed) : t(TranslationKeys.booking_Cancelled)}</Text>
+                                    <Text style={[GlobalStyle.subTitleStyle, Styles.subtitleText]}>{rideCancelReason?.current?.isDisputed ? t(TranslationKeys.disputed_statement) : t(TranslationKeys.cancellation_statement)}&nbsp;{rideCancelReason.current?.reason}</Text>
+                                </>
+                                : null
+                        }
+                    </View>
+                    <CustomBottomBtn onPress={() => {
+                        dispatch(resetRideOtpReducer())
+                        dispatch(setPaymentMethod("Card"))
+                        if (modalVisible?.type === "RideCancel") {
+                            navigation.reset({
+                                index: 0,
+                                routes: [{
+                                    name: 'DrawerStack',
+                                }]
+                            })
+                        }
+                    }} title={t(TranslationKeys.got_it)}
+                    // style={Styles.completedButton}
+                    />
+                </Modal>
+                : null}
         </View>
     );
 };
@@ -683,6 +792,32 @@ const useStyles = () => {
             height: wp(4),
             resizeMode: 'stretch',
             alignSelf: 'flex-end'
+        },
+        completedIcon: {
+            width: wp(20),
+            height: wp(20),
+            resizeMode: 'contain',
+            tintColor: colors.ERROR_TEXT
+        },
+        headingText: {
+            fontSize: FontSizes.FONT_SIZE_18,
+            fontFamily: Fonts.FONT_POP_SEMI_BOLD,
+            color: colors.PRIMARY_TEXT,
+            textAlign: 'center',
+            paddingTop: wp(5)
+        },
+        subtitleText: {
+            textAlign: 'center',
+            color: colors.SECONDARY_TEXT,
+            marginHorizontal: wp(5),
+            marginVertical: wp(2),
+        },
+        completedButton: {
+            backgroundColor: colors.PRIMARY,
+            width: '100%',
+            alignItems: 'center',
+            paddingVertical: wp(3.5),
+            borderRadius: wp(2),
         },
     });
 };

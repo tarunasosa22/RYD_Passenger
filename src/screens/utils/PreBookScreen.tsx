@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, FlatList, Text, Alert, ActivityIndicator, } from 'react-native';
+import { StyleSheet, View, FlatList, Text, Alert, ActivityIndicator, RefreshControl, } from 'react-native';
 import CommonRideDetailsContainer from '../../components/CommonRideDetailsContainer';
 import CustomContainer from '../../components/CustomContainer';
 import CustomHeader from '../../components/CustomHeader';
 import { useGlobalStyles } from '../../hooks/useGlobalStyles';
 import { useAppDispatch, useAppSelector } from '../../redux/Store';
 import useCustomNavigation from '../../hooks/useCustomNavigation';
-import { RideBookingListDetailsTypes, RideBookingListProps, deleteRideBooking, rideBookingList, showActiveRideModalReducer } from '../../redux/slice/rideSlice/RideSlice';
+import { RideBookingListDetailsTypes, RideBookingListProps, deleteRideBooking, resetRideBookingData, rideBookingList, showActiveRideModalReducer } from '../../redux/slice/rideSlice/RideSlice';
 import { useIsFocused } from '@react-navigation/native';
 import { heightPercentageToDP as hp, widthPercentageToDP as wp } from 'react-native-responsive-screen';
 import { Fonts } from '../../styles/Fonts';
@@ -23,6 +23,8 @@ export interface RideListApiCallProps {
     offset: number,
     pickup_mode?: string,
     status?: string,
+    pre_ride?: boolean,
+    active_ride?: boolean
 };
 
 interface TabsProps {
@@ -47,15 +49,18 @@ const PreBookScreen = () => {
     const Tabs: TabsProps[] = [
         { title: t(TranslationKeys.requested) },
         { title: t(TranslationKeys.completed) },
+        { title: t(TranslationKeys.cancelled) },
     ];
+    const [isRefereshing, setisRefereshing] = useState(false)
 
     useEffect(() => {
         if (focus) {
             const params: RideListApiCallProps = {
                 offset: offset,
-                pickup_mode: PICK_UP_MODE.LATER,
+                // pickup_mode: PICK_UP_MODE.LATER,
+                pre_ride: true,
                 // status: `${RIDE_STATUS.CREATED},${RIDE_STATUS.DRIVER_ALLOCATED}`
-                status: tabIndex == 0 ? `${RIDE_STATUS.CREATED}` : RIDE_STATUS.COMPLETED,
+                status: tabIndex == 0 ? `${RIDE_STATUS.CREATED},${RIDE_STATUS.DRIVER_ALLOCATED},${RIDE_STATUS.PAYMENT_HOLD}` : tabIndex == 1 ? RIDE_STATUS.COMPLETED : RIDE_STATUS.CANCELLED
             }
             rideBookingListApi(params)
             if (!riderActiveRideDetails || Object.entries(riderActiveRideDetails).length === 0) {
@@ -71,12 +76,23 @@ const PreBookScreen = () => {
         }
     }, [focus])
 
+    useEffect(() => {
+        if (rideBookingData?.results?.length !== 0) {
+            if(rideBookingData?.results?.length == 1){
+                rideBookingData?.results[0]?.id && rideBookingData?.results[0]?.rideStatus == `${RIDE_STATUS.DRIVER_ALLOCATED}` ? setExpandMore(rideBookingData?.results[0]?.id) : setExpandMore(null)
+            }else {
+                setExpandMore(null)
+            }   
+        }
+    }, [rideBookingData]);
+
     const rideBookingListApi = (params: RideListApiCallProps) => {
         dispatch(rideBookingList(params)).unwrap()
             .then((res) => {
                 setRideList(res)
                 setIsFooterLoading(false)
-                setOffset(res?.next ? params.offset + 10 : 0)
+                setisRefereshing(false)
+                setOffset(params.offset + 10)
             })
             .catch((error) => {
                 setIsFooterLoading(false)
@@ -92,7 +108,7 @@ const PreBookScreen = () => {
                 index={index}
                 expandMore={expandMore}
                 setExpandMore={setExpandMore}
-                onCancelPress={() => cancelFindDriverApi(item.id)}
+                onCancelPress={() => navigation.navigate('CancelTaxiScreen', {id: item?.id, isPreBook: true})}
             />
         );
     };
@@ -102,8 +118,9 @@ const PreBookScreen = () => {
         setOffset(0)
         let params: RideListApiCallProps = {
             offset: 0,
-            pickup_mode: PICK_UP_MODE.LATER,
-            status: index == 0 ? `${RIDE_STATUS.CREATED}` : RIDE_STATUS.COMPLETED,
+            // pickup_mode: PICK_UP_MODE.LATER,
+            pre_ride: true,
+            status: index == 0 ? `${RIDE_STATUS.CREATED},${RIDE_STATUS.DRIVER_ALLOCATED},${RIDE_STATUS.PAYMENT_HOLD}` : index == 1 ? RIDE_STATUS.COMPLETED : RIDE_STATUS.CANCELLED
         }
         // if (index !== 1) {
         //     delete params.pickup_mode
@@ -122,7 +139,8 @@ const PreBookScreen = () => {
                     dispatch(deleteRideBooking(id)).unwrap().then(res => {
                         const params: RideListApiCallProps = {
                             offset: offset,
-                            pickup_mode: PICK_UP_MODE.LATER,
+                            pre_ride: true,
+                            // pickup_mode: PICK_UP_MODE.LATER,
                             // status: `${RIDE_STATUS.CREATED},${RIDE_STATUS.DRIVER_ALLOCATED}`
                             status: tabIndex == 0 ? `${RIDE_STATUS.CREATED}` : RIDE_STATUS.COMPLETED,
                         }
@@ -142,7 +160,7 @@ const PreBookScreen = () => {
 
     return (
         <View style={GlobalStyle.container}>
-            {(isLoading && !isFooterLoading) ? <CustomActivityIndicator /> : null}
+            {(isLoading && !isFooterLoading && !isRefereshing) ? <CustomActivityIndicator /> : null}
             <CustomHeader title={t(TranslationKeys.pre_booked)}
                 onPress={() => {
                     // console.log('navigation-->', navigation?.getId())
@@ -164,10 +182,24 @@ const PreBookScreen = () => {
                 <FlatList
                     ref={flatlistref}
                     nestedScrollEnabled
-                    data={rideList?.results}
+                    data={rideBookingData?.results}
                     showsVerticalScrollIndicator={false}
                     renderItem={renderItem}
                     onEndReachedThreshold={0.5}
+                    refreshControl={
+                        <RefreshControl refreshing={isRefereshing} onRefresh={() => {
+                            setisRefereshing(true)
+                            if(!isRefereshing){
+                                const params: RideListApiCallProps = {
+                                    offset: 0,
+                                    // pickup_mode: PICK_UP_MODE.LATER,
+                                    pre_ride: true,
+                                    status: tabIndex == 0 ? `${RIDE_STATUS.CREATED},${RIDE_STATUS.DRIVER_ALLOCATED},${RIDE_STATUS.PAYMENT_HOLD}` : tabIndex == 1 ? RIDE_STATUS.COMPLETED : RIDE_STATUS.CANCELLED
+                                }
+                                rideBookingListApi(params)
+                            }
+                        }}/>
+                    }
                     ListFooterComponent={() => {
                         return (
                             isFooterLoading &&
@@ -175,17 +207,18 @@ const PreBookScreen = () => {
                         );
                     }}
                     onEndReached={() => {
-                        if (rideList?.next && !isLoading) {
+                        if (rideBookingData?.next && !isLoading) {
                             const params: RideListApiCallProps = {
                                 offset: offset,
-                                pickup_mode: PICK_UP_MODE.LATER,
-                                status: `${RIDE_STATUS.CREATED},${RIDE_STATUS.DRIVER_ALLOCATED}`
+                                // pickup_mode: PICK_UP_MODE.LATER,
+                                pre_ride: true,
+                                status: tabIndex == 1 ? RIDE_STATUS.COMPLETED : RIDE_STATUS.CANCELLED
                             }
                             setIsFooterLoading(true)
                             rideBookingListApi(params)
                         }
                     }}
-                    bounces={false}
+                    
                     ListEmptyComponent={
                         <View style={Styles.emptyContainerStyle}>
                             <Text style={Styles.emptyTxtStyle}>{t(TranslationKeys.pre_booked_ride_data_not_found)}</Text>

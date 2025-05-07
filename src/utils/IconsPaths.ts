@@ -102,4 +102,5 @@ export const Icons = {
     RECEIPT2: require('../assets/icons/bill.png'),
     DELIVERY_ICON: require('../assets/icons/person.png'),
     DELIVERY_PACKAGE: require('../assets/icons/delivery.png'),
+    GOODS_LOADING: require('../assets/icons/goodsLoading.png')
 };

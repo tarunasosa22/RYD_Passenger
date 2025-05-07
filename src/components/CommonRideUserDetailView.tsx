@@ -11,11 +11,13 @@ import { DriverCarDetails, DriverDetails } from '../redux/slice/rideSlice/RideSl
 import FastImage from 'react-native-fast-image';
 import { TranslationKeys } from '../localization/TranslationKeys';
 import { useTranslation } from 'react-i18next';
+import { DeletedUserProps } from '../redux/slice/homeSlice/HomeSlice';
 
 export interface locationProps {
     id: string,
     location: string
 };
+
 
 export interface deliveryDetailsProps {
     id: number,
@@ -36,10 +38,13 @@ interface CommonRideUserDetailViewProps {
         driver: DriverDetails | null,
         driverCar: DriverCarDetails | null,
         priceModel: { carType: string },
-        rideCancelBy?: { id: number, reason: string, cancelBy: string, createdAt: string } | null,
-        deliveryDetails?: deliveryDetailsProps
+        rideCancelBy?: { id: number, reason: string, cancelBy: string, createdAt: string, isDisputed: boolean } | null,
+        deliveryDetails?: deliveryDetailsProps,
+        deleteUser?: DeletedUserProps[],
+        pickUpMode?: string
     },
-    isPreBook?: boolean
+    isPreBook?: boolean,
+    isHomeScreen?: boolean
 };
 
 
@@ -49,41 +54,58 @@ const CommonRideUserDetailView = (props: CommonRideUserDetailViewProps) => {
     const Styles = useStyles();
     const [imageError, setImageError] = useState<boolean>(false);
     const { t } = useTranslation();
-
-    const cancelby = (props.userData?.rideCancelBy?.cancelBy == "Driver" || props.userData?.rideCancelBy?.cancelBy == "DRIVER") ? t(TranslationKeys.driver) : t(TranslationKeys.rider)
-
+    const { colors } = useAppSelector((state) => state.CommonSlice);
+    const cancelby = (props.userData?.rideCancelBy?.cancelBy == "Driver" || props.userData?.rideCancelBy?.cancelBy == "DRIVER") ? t(TranslationKeys.driver) : props?.userData?.deliveryDetails ? t(TranslationKeys.sender) : t(TranslationKeys.rider)
+    const isDispute = props.userData?.rideCancelBy?.isDisputed
     return (
-        <View style={GlobalStyle.rowContainer}>
-            <FastImage
-                onError={() => {
-                    setImageError(true)
-                }}
-                source={(props.userData.driver?.profilePic && !imageError) ? { uri: props.userData?.driver?.profilePic } : ImagesPaths.EMPTY_IMAGE} style={[Styles.userImageStyle]} />
-            <View style={Styles.detailsContainerStyle}>
-                <Text numberOfLines={1} style={Styles.userNameTxtStyle} adjustsFontSizeToFit>{props.isPreBook ? t(TranslationKeys.driver_not_allocated_yet) : props.userData.driver?.name ?? t(TranslationKeys.driver_not_found)}</Text>
-                <Text numberOfLines={1} style={Styles.carDetailsTxtStyle}>{props.userData?.priceModel?.carType} </Text>
-                {/* <Text numberOfLines={1} style={Styles.crnTxtStyle}>{props.userData.driverCar?.registrationNumber}</Text> */}
-            </View>
+        <>
             {(props?.userData?.rideCancelBy && !props?.userData?.deliveryDetails) ?
-                <View style={Styles.cancelContainerStyle}>
-                    <Text numberOfLines={1} style={Styles.cancelTxtStyle}>{cancelby ?? null}</Text>
+                <View style={[Styles.cancelContainerStyle, { alignSelf: 'flex-end', backgroundColor: isDispute ? colors.ERROR_PRIMARY_BACKGROUND : colors.LIGHT_PRIMARY_BACKGROUND }]}>
+                    <Text numberOfLines={1} style={Styles.cancelTxtStyle}>{isDispute ? t(TranslationKeys.disputed) + ' ' : t(TranslationKeys.cancelled) + ' '}{cancelby ?? null}</Text>
                 </View>
-                : null}
+                : (props?.userData?.deliveryDetails) ? (
+                    <View style={{ alignItems: 'flex-end' }}>
+                        {props?.userData?.rideCancelBy ?
+                            <View style={[Styles.cancelContainerStyle, { alignSelf: 'flex-end' }]}>
+                                <Text numberOfLines={1} style={Styles.cancelTxtStyle}>{isDispute ? t(TranslationKeys.disputed) + ' ' : t(TranslationKeys.cancelled) + ' '}{cancelby ?? null}</Text>
+                            </View> :
+                            null}
+                        {/* <Text style={Styles.requestTxtStyle}>{props?.userData?.deliveryDetails?.goodsType}</Text> */}
+                    </View>
+                ) : null}
+            <View style={GlobalStyle.rowContainer}>
+                <FastImage
+                    onError={() => {
+                        setImageError(true)
+                    }}
+                    source={((props.userData.driver?.profilePic == null ? props.userData.deleteUser[0]?.profilePic : props.userData.driver?.profilePic) && !imageError) ? { uri: (props.userData?.driver?.profilePic == null ? props.userData?.deleteUser[0]?.profilePic : props.userData?.driver?.profilePic) } : ImagesPaths.EMPTY_IMAGE} style={[Styles.userImageStyle]} />
+                <View style={Styles.detailsContainerStyle}>
+                    <Text numberOfLines={1} style={Styles.userNameTxtStyle} adjustsFontSizeToFit>{props.userData.driver?.name == null ? props.userData.deleteUser[0]?.name ?? t(TranslationKeys.driver_not_allocated) : props.userData.driver?.name}</Text>
+                    <Text numberOfLines={1} style={Styles.carDetailsTxtStyle}>{props.userData?.priceModel?.carType} </Text>
+                    {/* <Text numberOfLines={1} style={Styles.crnTxtStyle}>{props.userData.driverCar?.registrationNumber}</Text> */}
+                </View>
 
-            {(props?.userData?.deliveryDetails) ? (
-                <View style={{ alignItems: 'flex-end' }}>
-                    {props?.userData?.rideCancelBy ?
-                        <View style={[Styles.cancelContainerStyle, { alignSelf: 'flex-end' }]}>
-                            <Text numberOfLines={1} style={Styles.cancelTxtStyle}>{cancelby ?? null}</Text>
-                        </View> :
-                        <View style={Styles.cancelContainerStyle}>
-                            <Text style={Styles.commonTxtStyle}>{t(TranslationKeys.delivery_ride)}</Text>
-                        </View>}
-                    <Text style={Styles.requestTxtStyle}>{props?.userData?.deliveryDetails?.goodsType}</Text>
-                    <Text style={Styles.requestTxtStyle}>{props?.userData?.deliveryDetails?.goodsWeight}{t(TranslationKeys.kg)} {props?.userData?.deliveryDetails?.goodsPackage}</Text>
+                <View>
+                    {(props?.userData?.pickUpMode && props?.isHomeScreen) ?
+                        <View style={[Styles.cancelContainerStyle, { marginBottom: wp(1), alignSelf: 'flex-end' }]}>
+                            <Text numberOfLines={1} style={Styles.cancelTxtStyle}>{props?.userData?.pickUpMode}</Text>
+                        </View>
+                        : null}
+
+                    {(props?.userData?.deliveryDetails) ? (
+                        <View style={{ alignItems: 'flex-end' }}>
+                            {props?.userData?.rideCancelBy ?
+                                null :
+                                <View style={Styles.cancelContainerStyle}>
+                                    <Text style={Styles.commonTxtStyle}>{t(TranslationKeys.delivery_ride)}</Text>
+                                </View>}
+                            {/* <Text style={Styles.requestTxtStyle}>{props?.userData?.deliveryDetails?.goodsType}</Text> */}
+                            <Text style={Styles.requestTxtStyle}>{props?.userData?.deliveryDetails?.goodsWeight}{t(TranslationKeys.kg)} {props?.userData?.deliveryDetails?.goodsPackage}</Text>
+                        </View>
+                    ) : null}
                 </View>
-            ) : null}
-        </View>
+            </View>
+        </>
     );
 };
 
@@ -129,8 +151,8 @@ const useStyles = () => {
             color: colors.PRIMARY_TEXT,
             fontFamily: Fonts.FONT_POP_REGULAR,
             fontSize: FontSizes.FONT_SIZE_14,
-            maxWidth: wp(24),
-            textTransform: 'capitalize'
+            // maxWidth: wp(24),
+            textTransform: 'capitalize',
         },
         detailsContainerStyle: {
             flex: 1,

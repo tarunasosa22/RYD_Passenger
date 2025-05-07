@@ -57,6 +57,7 @@ const RateDriverScreen = () => {
     const [isCouponLoading, setisCouponLoading] = useState(false)
     const { paymentMethod } = useAppSelector(state => state.HomeSlice)
     const [isFullscratch, setIsFullScratch] = useState(false)
+    const [isBtnDiabled, setIsBtnDisable] = useState(false)
 
     useEffect(() => {
         setAdjustResize()
@@ -128,21 +129,25 @@ const RateDriverScreen = () => {
             if (reason != undefined) {
                 data.append("reason", reason)
             }
+            setIsBtnDisable(true)
             dispatch(feedbackApi(data)).unwrap()
                 .then(res => {
                     if (from !== "YourRidesScreen") {
+                        setIsBtnDisable(false)
                         dispatch(resetRideDetails())
                     }
                     if (from === "YourRidesScreen") {
                         dispatch(rideDetails(rideId)).unwrap().then((res) => {
+                            setIsBtnDisable(false)
                             dispatch(setRideDetailsData(res))
                             navigation.goBack()
                             console.log("🚀 ~ file: RateDriverScreen.tsx:67 ~ dispatch ~ res:", res)
                         }).catch((error) => {
+                            setIsBtnDisable(false)
                             console.log("🚀 ~ file: RateDriverScreen.tsx:69 ~ dispatch ~ error:", error)
                         })
-
                     } else {
+                        setIsBtnDisable(false)
                         navigation.reset({
                             index: 0, routes: [{
                                 name: 'DrawerStack',
@@ -151,7 +156,10 @@ const RateDriverScreen = () => {
                     }
                     console.log("response", res)
                 })
-                .catch(e => console.log("error", e))
+                .catch(e => {
+                    console.log("error", e)
+                    setIsBtnDisable(false)
+                })
         }
     };
 
@@ -202,7 +210,7 @@ const RateDriverScreen = () => {
                     />
                 </CustomContainer>
             </KeyboardAwareScrollView>
-            <CustomBottomBtn title={t(TranslationKeys.share_feedback)} onPress={submitFeedback} />
+            <CustomBottomBtn title={t(TranslationKeys.share_feedback)} onPress={submitFeedback} disabled={isBtnDiabled} />
             <Modal
                 animationType="slide"
                 transparent={true}

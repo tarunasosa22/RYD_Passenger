@@ -21,7 +21,7 @@
     <RelativeLayout
         android:layout_width="350dp"
         android:layout_height="280dp"
-        android:background="@drawable/bootsplash_logo"
+        android:background="@drawable/splash_icon"
         android:layout_centerHorizontal="true"
         android:layout_marginTop="150dp"
         />

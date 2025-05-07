@@ -3,7 +3,7 @@ import { ApiConstants } from "../../../config/ApiConstants";
 import { axiosClient } from "../../../config/Axios";
 import { parseErrorData } from "../../CommonSlice";
 import { AppAlert } from "../../../utils/AppAlerts";
-import { RideDetailsTypes } from "../homeSlice/HomeSlice";
+import { DeletedUserProps, RideDetailsTypes } from "../homeSlice/HomeSlice";
 import { TranslationKeys } from "../../../localization/TranslationKeys";
 import { t } from "i18next";
 import { RIDE_STATUS } from "../../../utils/Constats";
@@ -58,11 +58,15 @@ interface initialStateTypes {
     rideOtp: number | undefined,
     rideBookingDataList: RideBookingListProps[] | [],
     goodsInfo: GoodsInfoProps,
+    phoneValidate: any
     goodsType: GoodsTypeProps[] | [],
     packageType: GoodsTypeProps[] | [],
     deliveryDetails: DeliveryDetails | undefined,
     riderCreatedRideData: RideBookingListDetailsTypes | undefined
-
+    isNavigationIndex: boolean,
+    isTipAmount: number,
+    isTipConianerVisible: boolean,
+    customTip: any
 };
 
 export interface DriverDetailsTypes {
@@ -200,6 +204,7 @@ export interface RideBookingListDetailsTypes {
     },
     points: string,
     createdAt: string,
+    rideBookingOtp: string,
     distance: number | null,
     driver: DriverDetails | null,
     driverCar: DriverCarDetails | null,
@@ -215,13 +220,14 @@ export interface RideBookingListDetailsTypes {
         destination: RideLocationTypes,
         stop: RideLocationTypes[] | []
     },
-    rideCancelBy: { id: number, reason: string, cancelBy: string, createdAt: string } | null,
+    rideCancelBy: { id: number, reason: string, cancelBy: string, createdAt: string, isDisputed: boolean } | null,
     ridePayment: {
         paymentMethod: string
         totalFare: number
     },
     rideStatus: string,
     rider: UserDetails | null,
+    deletedUser: DeletedUserProps[],
     deliveryDetails: {
         id: number,
         senderFullName: string,
@@ -264,7 +270,7 @@ interface CancelRideProps {
     createdAt: string,
     rideBooking: number,
     transactionId?: any,
-    totalFare?:any
+    totalFare?: any
 };
 
 const initialState: initialStateTypes = {
@@ -289,6 +295,7 @@ const initialState: initialStateTypes = {
     discountCouponList: [],
     rideOtp: undefined,
     rideBookingDataList: [],
+    phoneValidate: undefined,
     goodsInfo: {
         goodsType: [],
         packageType: [],
@@ -298,7 +305,11 @@ const initialState: initialStateTypes = {
     goodsType: [],
     packageType: [],
     deliveryDetails: undefined,
-    riderCreatedRideData: undefined
+    riderCreatedRideData: undefined,
+    isNavigationIndex: false,
+    isTipAmount: 0,
+    isTipConianerVisible: false,
+    customTip: ''
 };
 
 export interface apiErrorTypes {
@@ -313,7 +324,9 @@ interface paramsTypes {
     reason?: string,
     status?: string,
     formData?: FormData,
-    rideId?: any
+    rideId?: any,
+    pre_ride?: boolean,
+    active_ride?: boolean
 };
 
 const RIDE = "HOME";
@@ -325,7 +338,14 @@ export const rideBookingList = createAsyncThunk<RideBookingListProps, paramsType
             let response
             if (params.pickup_mode) {
                 response = await axiosClient.get(url + `&pickup_mode=${params.pickup_mode}`)
-            } else {
+            }
+            else if (params.active_ride !== undefined) {
+                response = await axiosClient.get(url + `&active_ride=${params.active_ride}`)
+            }
+            else if (params.pre_ride !== undefined) {
+                response = await axiosClient.get(url + `&pre_ride=${params.pre_ride}`)
+            }
+            else {
                 response = await axiosClient.get(url)
             }
             return response.data
@@ -506,6 +526,20 @@ export const goodsInfoApi = createAsyncThunk<any, null, { rejectValue: apiErrorT
         }
     });
 
+export const phone_validation_api = createAsyncThunk<any, FormData, { rejectValue: apiErrorTypes }>(RIDE + "/phoneValidationApi",
+    async (params, { rejectWithValue }) => {
+        try {
+            const response = await axiosClient.post(ApiConstants.PHONE_VALIDATION, params)
+            return response.data
+        } catch (e: any) {
+            if (e.code !== "ERR_NETWORK" && e.response.status !== 401) {
+                const error = parseErrorData(e.response)
+                // AppAlert(t(TranslationKeys.error), error)
+            }
+            return rejectWithValue(e?.response)
+        }
+    });
+
 export const RideSlice = createSlice({
     name: RIDE,
     initialState,
@@ -542,6 +576,12 @@ export const RideSlice = createSlice({
         setRideOtpReducer: (state, action) => {
             state.rideOtp = action.payload
         },
+        setnavigationDirection: (state, action) => {
+            state.isNavigationIndex = action.payload
+        },
+        setTipAmount: (state, action) => {
+            state.isTipAmount = action.payload
+        },
         resetRideOtpReducer: (state) => {
             state.rideOtp = undefined
         },
@@ -566,6 +606,12 @@ export const RideSlice = createSlice({
         resetDeliveryDetails: (state, action) => {
             state.deliveryDetails = undefined
         },
+        setTipConatinerVisible: (state, action) => {
+            state.isTipConianerVisible = action.payload
+        },
+        setCustomTip: (state, action) => {
+            state.customTip = action.payload
+        }
     },
     extraReducers(builder) {
         //rideBookingList List
@@ -626,9 +672,9 @@ export const RideSlice = createSlice({
         builder.addCase(riderActiveRide.fulfilled, (state, action) => {
             state.isLoading = false
             let isCreatedRide = action.payload;
-            if(isCreatedRide.rideStatus == RIDE_STATUS.CREATED || isCreatedRide.rideStatus == RIDE_STATUS.PAYMENT_HOLD){
+            if (isCreatedRide.rideStatus == RIDE_STATUS.CREATED || isCreatedRide.rideStatus == RIDE_STATUS.PAYMENT_HOLD) {
                 state.riderCreatedRideData = action.payload
-            }else {
+            } else {
                 state.riderActiveRideDetails = action.payload
             }
         });
@@ -719,8 +765,20 @@ export const RideSlice = createSlice({
             state.isLoading = false
         });
 
+        //phone_validation_api
+        builder.addCase(phone_validation_api.pending, (state) => {
+            state.isLoading = true
+        });
+        builder.addCase(phone_validation_api.fulfilled, (state, action) => {
+            state.isLoading = false
+            state.phoneValidate = action.payload
+        });
+        builder.addCase(phone_validation_api.rejected, (state, action) => {
+            state.isLoading = false
+        });
+
     },
 });
 
-export const { resetDeliveryDetails, setDeliveryDetails, setPackageType, setGoodsType, resetRideBookingData, restApiCounter, setTipBtnOn, resetRideDetailsData, setDriverDetails, setRideBookingData, showActiveRideModalReducer, setRideDetailsData, setRideStatusReducer, resetDataOfNearByDriver, restActiveRideDetailsData, setRideOtpReducer, resetRideOtpReducer } = RideSlice.actions;
+export const { setCustomTip, setTipConatinerVisible, setTipAmount, setnavigationDirection, resetDeliveryDetails, setDeliveryDetails, setPackageType, setGoodsType, resetRideBookingData, restApiCounter, setTipBtnOn, resetRideDetailsData, setDriverDetails, setRideBookingData, showActiveRideModalReducer, setRideDetailsData, setRideStatusReducer, resetDataOfNearByDriver, restActiveRideDetailsData, setRideOtpReducer, resetRideOtpReducer } = RideSlice.actions;
 export default RideSlice.reducer;

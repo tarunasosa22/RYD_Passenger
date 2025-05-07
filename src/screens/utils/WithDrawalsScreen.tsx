@@ -28,6 +28,7 @@ import { useLanguage } from '../../context/LanguageContext'
 import 'moment/locale/ar';
 import 'moment/locale/en-gb';
 import 'moment/locale/hi';
+import { navigationRef } from '../../utils/NavigationServices'
 
 interface SocketWithDrawalType {
     status: string,
@@ -198,7 +199,7 @@ const WithDrawalsScreen = () => {
         withdrwalRef.current = new WebSocket(url, null, {
             headers: {
                 Authorization: `Token ${tokenDetail?.authToken}`,
-                "Accept-Language": i18n.language
+                // "Accept-Language": i18n.language
             }
         })
         withdrwalRef.current.onopen = () => {
@@ -218,7 +219,7 @@ const WithDrawalsScreen = () => {
         })
         withdrwalRef.current.addEventListener("close", () => {
             console.log("CONNECTION CLOSE");
-            if (navigation.getId() == "WithDrawalsScreen") {
+            if (focus && navigationRef.current?.getCurrentRoute()?.name == "WithDrawalsScreen") {
                 setTimeout(() => {
                     connectionInit()
                 }, 600);

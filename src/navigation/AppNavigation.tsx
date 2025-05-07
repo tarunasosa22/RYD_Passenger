@@ -70,9 +70,9 @@ const AppNavigation = () => {
                         title={t(TranslationKeys.error)}
                         subTitle={t(TranslationKeys.your_seesion_has_expired)}
                         onPressYes={() => {
-                            // if (Platform.OS === 'ios') {
-                            //     PushNotificationIOS.setApplicationIconBadgeNumber(0)
-                            // }
+                            if (Platform.OS === 'ios') {
+                                // PushNotificationIOS.setApplicationIconBadgeNumber(0)
+                            }
                             setTimeout(() => {
                                 store.dispatch({ type: USER_LOGOUT });
                                 messaging().deleteToken()
@@ -207,9 +207,9 @@ const AppNavigation = () => {
                     subTitle={t(TranslationKeys.your_seesion_has_expired)}
                     onPressYes={() => {
                         setTimeout(() => {
-                            // if (Platform.OS === 'ios') {
-                            //     PushNotificationIOS.setApplicationIconBadgeNumber(0)
-                            // }
+                            if (Platform.OS === 'ios') {
+                                // PushNotificationIOS.setApplicationIconBadgeNumber(0)
+                            }
                             store.dispatch({ type: USER_LOGOUT });
                             messaging().deleteToken()
                             navigationRef?.current?.reset({ index: 0, routes: [{ name: 'AuthStack' }] });

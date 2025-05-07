@@ -104,7 +104,7 @@ const DestinationLocationScreen = () => {
             })
         return () => {
             // dispatch(resetDestinations())
-            dispatch(restActiveRideDetailsData())
+            // dispatch(restActiveRideDetailsData())
             // setOffset(0)
         }
     }, []);

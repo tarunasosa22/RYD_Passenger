@@ -14,9 +14,9 @@ export type RootStackParamList = {
     BookingScreen: { isDeliveryModule?: boolean };
     EmergencyContactScreen: { status: string | undefined };
     TrackDriverScreen: { rideId: number };
-    CancelTaxiScreen: { id: number };
+    CancelTaxiScreen: { id: number, isPreBook?: boolean, isDispute?: boolean };
     RateDriverScreen: { rideId: number, from: any };
-    SearchingRiderScreen: { id: number | null | undefined | string, isDeliveryModule?: boolean, from?: string, isAppCloseOrOpen?:boolean };
+    SearchingRiderScreen: { id: number | null | undefined | string, isDeliveryModule?: boolean, from?: string, isAppCloseOrOpen?: boolean };
     SosScreen: { status: string | undefined };
     ChatScreen: {
         roomId: number,

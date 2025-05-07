@@ -21,14 +21,14 @@ import { geoCoderAddress, getAsyncStorageData, getCurrentPosition, hasLocationPe
 import CustomActivityIndicator from '../../components/CustomActivityIndicator';
 import { AppAlert } from '../../utils/AppAlerts';
 import { GooglePlacesAutocomplete, GooglePlacesAutocompleteRef } from 'react-native-google-places-autocomplete';
-import { ChangeLocationProps, LocationTypes, addSavePlace, createDeliveryRide, onChangePickUpLocation, pickUpLocationReducer, recentPlaceList, resetDestinations, setDestinations, setFilteredDestinations, setGlobalLang, setIsComplateTimer, setPaymentMethod } from '../../redux/slice/homeSlice/HomeSlice';
+import { ChangeLocationProps, LocationTypes, addSavePlace, onChangePickUpLocation, pickUpLocationReducer, recentPlaceList, resetDestinations, setDestinations, setFilteredDestinations, setGlobalLang, setIsComplateTimer, setPaymentMethod } from '../../redux/slice/homeSlice/HomeSlice';
 import MapView, { Details, MapMarker, Region } from 'react-native-maps';
 import UserLogOutPopUp from '../../components/bottomSheetComponents/UserLogOutPopUp';
 import { HomeBottomSheetType, LOCATION_WATCH_OPTION, PICK_UP_MODE, RIDE_STATUS } from '../../utils/Constats';
 import SavePlacesBottonSheetComponent from '../../components/bottomSheetComponents/SavePlacesBottonSheetComponent';
 import { GOOGLE_MAP_API } from '../../config/Host';
 import { useIsFocused } from '@react-navigation/native';
-import { cancelRide, deleteRideBooking, resetDataOfNearByDriver, restActiveRideDetailsData, restApiCounter, riderActiveRide, showActiveRideModalReducer } from '../../redux/slice/rideSlice/RideSlice';
+import { RideBookingListDetailsTypes, cancelRide, deleteRideBooking, resetDataOfNearByDriver, resetRideBookingData, restActiveRideDetailsData, restApiCounter, rideBookingList, riderActiveRide, showActiveRideModalReducer } from '../../redux/slice/rideSlice/RideSlice';
 import { startRideDriverLocation } from '../../redux/slice/rideSlice/RideSlice';
 import DeviceInfo from 'react-native-device-info';
 import CommonActiveRidePopUp from '../../components/CommonActiveRidePopUp';
@@ -46,6 +46,11 @@ import moment from 'moment';
 import { Button } from 'react-native';
 import { useLanguage } from '../../context/LanguageContext';
 import { AppStrings } from '../../utils/AppStrings';
+import { navigationRef } from '../../utils/NavigationServices';
+import { FlatList } from 'react-native';
+import { RideListApiCallProps } from './PreBookScreen';
+import { ActivityIndicator } from 'react-native';
+import { useDrawerStatus } from '@react-navigation/drawer';
 
 export interface BottomSheetTypeProps {
     type: string,
@@ -82,7 +87,7 @@ const DeliveryHomeScreen = () => {
     const { isDeleteAccount, isLogOut } = useAppSelector(state => state.SettingSlice)
     const { userDetail, isLoading, userCordinates, tokenDetail, code } = useAppSelector(state => state.AuthSlice);
     const { recentPlaceListData, changePickUpLocation, lastActiveTime, createRideData, createDeliveryRideData, isComplateTimer } = useAppSelector(state => state.HomeSlice);
-    const { showActiveRideModal, nearByDriverListData } = useAppSelector(state => state.RideSlice);
+    const { showActiveRideModal, nearByDriverListData, rideBookingData } = useAppSelector(state => state.RideSlice);
     const { riderActiveRideDetails } = store.getState().RideSlice;
     const [bottomSheetType, setBottomSheetType] = useState<BottomSheetTypeProps>(userDetail?.name ? HomeBottomSheetType.savedPlaces : HomeBottomSheetType.userName);
     const [backDrop, setbackDrop] = useState<boolean>(false);
@@ -105,13 +110,63 @@ const DeliveryHomeScreen = () => {
     const [isVisiblePerModal, setIsVisiblePerModal] = useState<boolean>(true);
     const { t } = useTranslation();
     const { locale } = useLanguage()
+    const [isFooterLoading, setIsFooterLoading] = useState(false)
+    const [expandMore, setExpandMore] = useState<number | null>(null);
+    const flatlistref = useRef<FlatList<RideBookingListDetailsTypes>>(null)
+    const isDrawerOpen = useDrawerStatus() === 'open';
+
+    const rideBookingListApi = (params: RideListApiCallProps) => {
+        dispatch(rideBookingList(params)).unwrap()
+            .then((res) => {
+                if (res?.results && res?.results?.length != 0) {
+                    setTimeout(() => {
+                        if (!isDrawerOpen) {
+                            dispatch(showActiveRideModalReducer({
+                                isFirstTime: false,
+                                visibleModal: true
+                            }))
+                        }
+                    }, 2000);
+                    if (res?.results?.length == 1) {
+                        res?.results[0]?.id && res?.results[0]?.rideStatus == `${RIDE_STATUS.DRIVER_ALLOCATED}` || res?.results[0]?.rideStatus == `${RIDE_STATUS.ONGOING}` || res?.results[0]?.rideStatus == `${RIDE_STATUS.DRIVER_ENDED}` ? setExpandMore(res?.results[0]?.id) : setExpandMore(null)
+                    }
+                }
+                setIsFooterLoading(false)
+                setOffset(params.offset + 10)
+            })
+            .catch((error) => {
+                setIsFooterLoading(false)
+                console.log("🚀 ~ file: YourRidesScreen.tsx:302 ~ rideBookingListApi ~ error:", error)
+            })
+    };
+
+    useEffect(() => {
+        if (isDrawerOpen && showActiveRideModal.visibleModal) {
+            dispatch(showActiveRideModalReducer({
+                isFirstTime: false,
+                visibleModal: false
+            }))
+        }
+    }, [isDrawerOpen, showActiveRideModal?.visibleModal])
+
+    useEffect(() => {
+        if (rideBookingData?.results?.length == 1) {
+            rideBookingData?.results[0]?.id && rideBookingData?.results[0]?.rideStatus == `${RIDE_STATUS.DRIVER_ALLOCATED}` || rideBookingData?.results[0]?.rideStatus == `${RIDE_STATUS.ONGOING}` || rideBookingData?.results[0]?.rideStatus == `${RIDE_STATUS.DRIVER_ENDED}` ? setExpandMore(rideBookingData?.results[0]?.id) : setExpandMore(null)
+        }
+    }, [rideBookingData]);
 
     useEffect(() => {
         if (focus) {
-            setTimeout(() => {
-                bottomSheetRef.current?.expand();
-            }, 1100);
             // dispatch(getCodesListApi(null)).unwrap()
+            let paramss: RideListApiCallProps;
+            paramss = {
+                offset: offset,
+                active_ride: true,
+                // pickup_mode: tabIndex != 0 ? '' : PICK_UP_MODE.NOW,
+                status: `${RIDE_STATUS.DRIVER_ALLOCATED},${RIDE_STATUS.ONGOING},${RIDE_STATUS.DRIVER_ENDED}`
+            }
+
+            rideBookingListApi(paramss)
             getRiderDetails()
             const params = {
                 offset: 0,
@@ -126,6 +181,7 @@ const DeliveryHomeScreen = () => {
             setOffset(0)
             setShowPickUpContainer(false)
             dispatch(restActiveRideDetailsData())
+            dispatch(resetRideBookingData())
             // dispatch(resetDataOfNearByDriver())
 
         }
@@ -195,14 +251,16 @@ const DeliveryHomeScreen = () => {
     //     }
     // }, [allowLocation])
 
-    useEffect(() => {
-        if (riderActiveRideDetails && riderActiveRideDetails?.id && showActiveRideModal?.isFirstTime) {
-            dispatch(showActiveRideModalReducer({
-                isFirstTime: false,
-                visibleModal: true
-            }))
-        }
-    }, [riderActiveRideDetails])
+    // useEffect(() => {
+    //     if (riderActiveRideDetails && riderActiveRideDetails?.id && navigationRef.current?.getCurrentRoute()?.name == 'DeliveryHomeScreen') {
+    //         setTimeout(() => {
+    //             dispatch(showActiveRideModalReducer({
+    //                 isFirstTime: false,
+    //                 visibleModal: true
+    //             }))
+    //         }, 2000);
+    //     }
+    // }, [riderActiveRideDetails])
 
     useEffect(() => {
         if (isLogOut) {
@@ -481,6 +539,65 @@ const DeliveryHomeScreen = () => {
         []
     );
 
+    const renderActiveRide = ({ item, index }: { item: RideBookingListDetailsTypes, index: number }) => {
+        return (
+            <View style={[Styles.activerRideConatiner]} >
+                <CommonActiveRidePopUp data={item}
+                    isLengthOne={store.getState().RideSlice.rideBookingData?.results?.length == 1}
+                    // onClose={() => {
+                    //     dispatch(showActiveRideModalReducer({
+                    //         ...showActiveRideModal,
+                    //         visibleModal: false
+                    //     }))
+                    // }}
+                    isPickModeContainer={true}
+                    isexpandMore={expandMore}
+                    setIsExpandMore={setExpandMore}
+                    onCancel={() => {
+                        dispatch(showActiveRideModalReducer({
+                            ...showActiveRideModal,
+                            visibleModal: false
+                        }))
+                        navigation.navigate('CancelTaxiScreen', { id: item?.id, isDispute: (item?.rideStatus == RIDE_STATUS.ONGOING || item?.rideStatus == RIDE_STATUS.DRIVER_ENDED) })
+
+                    }}
+                    onNavigateToPrebook={() => {
+                        if (item.pickupMode === PICK_UP_MODE.NOW) {
+                            navigation.navigate("DrawerStack", {
+                                screen: 'YourRidesScreen',
+                                params: {
+                                    notificationType: undefined
+                                }
+                            })
+                            dispatch(showActiveRideModalReducer({
+                                ...showActiveRideModal,
+                                visibleModal: false
+                            }))
+                        } else {
+                            if (item.pickupMode === PICK_UP_MODE.LATER && item.rideStatus === RIDE_STATUS.DRIVER_ALLOCATED || item.rideStatus === RIDE_STATUS.ONGOING || item.rideStatus === RIDE_STATUS.DRIVER_ENDED) {
+                                navigation.navigate("DrawerStack", {
+                                    screen: 'YourRidesScreen',
+                                    params: {
+                                        notificationType: undefined
+                                    }
+                                })
+                            } else {
+                                navigation.navigate("DrawerStack", {
+                                    screen: 'PreBookScreen',
+                                })
+                            }
+                            dispatch(showActiveRideModalReducer({
+                                ...showActiveRideModal,
+                                visibleModal: false
+                            }))
+                        }
+
+                    }}
+                />
+            </View>
+        );
+    };
+
     // const CustomAlert = () => {
     //     return (
     //         <Alert w="100%" variant={"left-accent"} bgColor={colors.ALERT_BACKGROUND_COLOR} borderLeftColor={colors.PRIMARY}>
@@ -562,7 +679,7 @@ const DeliveryHomeScreen = () => {
 
     return (
         <SafeAreaView edges={['top']} style={GlobalStyle.container}>
-            {(isLoading || loading) ? <CustomActivityIndicator /> : null}
+            {(isLoading || loading || isFooterLoading) ? <CustomActivityIndicator /> : null}
             {
                 !isVisiblePerModal ?
                     <ReactNativeModal
@@ -618,6 +735,12 @@ const DeliveryHomeScreen = () => {
                             <CustomIconButton
                                 onPress={() => {
                                     if (userDetail?.name) {
+                                        setTimeout(() => {
+                                            dispatch(showActiveRideModalReducer({
+                                                ...showActiveRideModal,
+                                                visibleModal: false
+                                            }))
+                                        }, 1000);
                                         navigation.openDrawer()
                                     } else {
                                         emptyUserNameAlert()
@@ -1019,58 +1142,103 @@ const DeliveryHomeScreen = () => {
                         }} title={t(TranslationKeys.confirm_location)} />
                     : null
             }
-            {showActiveRideModal?.visibleModal ? <ReactNativeModal
-                isVisible={(showActiveRideModal?.visibleModal && riderActiveRideDetails?.id)}
+            {(!isDrawerOpen && showActiveRideModal?.visibleModal && navigationRef.current?.getCurrentRoute()?.name == "DeliveryHomeScreen") ? <ReactNativeModal
+                isVisible={(showActiveRideModal.visibleModal)}
             >
-                {riderActiveRideDetails && riderActiveRideDetails?.id &&
-                    <CommonActiveRidePopUp data={riderActiveRideDetails}
-                        onClose={() => {
-                            dispatch(showActiveRideModalReducer({
-                                ...showActiveRideModal,
-                                visibleModal: false
-                            }))
-                        }}
-                        onCancel={() => {
-                            dispatch(showActiveRideModalReducer({
-                                ...showActiveRideModal,
-                                visibleModal: false
-                            }))
-                            navigation.navigate('CancelTaxiScreen', { id: riderActiveRideDetails?.id })
+                {store.getState().RideSlice.rideBookingData.results.length > 0 &&
+                    // <CommonActiveRidePopUp data={riderActiveRideDetails}
+                    //     onClose={() => {
+                    //         dispatch(showActiveRideModalReducer({
+                    //             ...showActiveRideModal,
+                    //             visibleModal: false
+                    //         }))
+                    //     }}
+                    //     onCancel={() => {
+                    //         dispatch(showActiveRideModalReducer({
+                    //             ...showActiveRideModal,
+                    //             visibleModal: false
+                    //         }))
+                    //         navigation.navigate('CancelTaxiScreen', { id: riderActiveRideDetails?.id })
 
-                        }}
-                        onNavigateToPrebook={() => {
-                            if (riderActiveRideDetails.pickupMode === PICK_UP_MODE.NOW) {
-                                navigation.navigate("DrawerStack", {
-                                    screen: 'YourRidesScreen',
-                                    params: {
-                                        notificationType: undefined
+                    //     }}
+                    //     onNavigateToPrebook={() => {
+                    //         if (riderActiveRideDetails.pickupMode === PICK_UP_MODE.NOW) {
+                    //             navigation.navigate("DrawerStack", {
+                    //                 screen: 'YourRidesScreen',
+                    //                 params: {
+                    //                     notificationType: undefined
+                    //                 }
+                    //             })
+                    //             dispatch(showActiveRideModalReducer({
+                    //                 ...showActiveRideModal,
+                    //                 visibleModal: false
+                    //             }))
+                    //         } else {
+                    //             if (riderActiveRideDetails.pickupMode === PICK_UP_MODE.LATER && riderActiveRideDetails.rideStatus === RIDE_STATUS.DRIVER_ALLOCATED || riderActiveRideDetails.rideStatus === RIDE_STATUS.ONGOING || riderActiveRideDetails.rideStatus === RIDE_STATUS.DRIVER_ENDED) {
+                    //                 navigation.navigate("DrawerStack", {
+                    //                     screen: 'YourRidesScreen',
+                    //                     params: {
+                    //                         notificationType: undefined
+                    //                     }
+                    //                 })
+                    //             } else {
+                    //                 navigation.navigate("DrawerStack", {
+                    //                     screen: 'PreBookScreen',
+                    //                 })
+                    //             }
+                    //             dispatch(showActiveRideModalReducer({
+                    //                 ...showActiveRideModal,
+                    //                 visibleModal: false
+                    //             }))
+                    //         }
+
+                    //     }}
+                    //  />
+                    <View style={[Styles.mainContainerStyle, Styles.mainContainerShadowStyle, { maxHeight: hp(90) }]} >
+                        <View style={[GlobalStyle.rowContainer, { justifyContent: 'space-between', marginVertical: wp(2), marginHorizontal: wp(1), alignItems: 'center' }]}>
+                            <Text style={Styles.activeRideFoundtext}>{riderActiveRideDetails?.deliveryDetails ? t(TranslationKeys.active_delivery_found) : t(TranslationKeys.active_ride_found_c)}</Text>
+                            <TouchableOpacity onPress={() => {
+                                dispatch(showActiveRideModalReducer({
+                                    ...showActiveRideModal,
+                                    visibleModal: false
+                                }))
+                            }} >
+                                <Image source={Icons.ROUND_CLOSE_ICON} style={Styles.commonRoundIconStyle2} />
+                            </TouchableOpacity>
+                        </View>
+                        <FlatList
+                            ref={flatlistref}
+                            data={store.getState().RideSlice.rideBookingData.results}
+                            renderItem={renderActiveRide}
+                            nestedScrollEnabled
+                            onEndReachedThreshold={0.5}
+                            style={store.getState().RideSlice.rideBookingData?.results?.length !== 1 ? { height: Platform.OS == "ios" ? hp(60) : '65%' } : null}
+                            ListFooterComponent={() => {
+                                return (
+                                    isFooterLoading &&
+                                    <ActivityIndicator style={{ margin: wp(5) }} color={colors.PRIMARY} />
+                                );
+                            }}
+                            onEndReached={() => {
+                                if (store.getState().RideSlice.rideBookingData?.next && !isFooterLoading) {
+                                    const params: RideListApiCallProps = {
+                                        offset: offset,
+                                        active_ride: true,
+                                        status: `${RIDE_STATUS.DRIVER_ALLOCATED},${RIDE_STATUS.ONGOING},${RIDE_STATUS.DRIVER_ENDED}`
                                     }
-                                })
-                                dispatch(showActiveRideModalReducer({
-                                    ...showActiveRideModal,
-                                    visibleModal: false
-                                }))
-                            } else {
-                                if (riderActiveRideDetails.pickupMode === PICK_UP_MODE.LATER && riderActiveRideDetails.rideStatus === RIDE_STATUS.DRIVER_ALLOCATED || riderActiveRideDetails.rideStatus === RIDE_STATUS.ONGOING) {
-                                    navigation.navigate("DrawerStack", {
-                                        screen: 'YourRidesScreen',
-                                        params: {
-                                            notificationType: undefined
-                                        }
-                                    })
-                                } else {
-                                    navigation.navigate("DrawerStack", {
-                                        screen: 'PreBookScreen',
-                                    })
+                                    setIsFooterLoading(true)
+                                    rideBookingListApi(params)
                                 }
-                                dispatch(showActiveRideModalReducer({
-                                    ...showActiveRideModal,
-                                    visibleModal: false
-                                }))
-                            }
-
-                        }}
-                    />}
+                            }}
+                            bounces={false}
+                        // ListEmptyComponent={
+                        //     <View style={Styles.emptyContainerStyle}>
+                        //         <Text style={Styles.emptyTxtStyle}>{tabIndex == 0 ? t(TranslationKeys.active) : tabIndex == 1 ? t(TranslationKeys.completed) : t(TranslationKeys.cancelled)} {t(TranslationKeys.ride_data_not_found)}</Text>
+                        //     </View>
+                        // }
+                        />
+                    </View>
+                }
             </ReactNativeModal> : null}
         </SafeAreaView >
     );
@@ -1252,6 +1420,45 @@ const useStyles = () => {
             locationModalSettingBtn: {
                 paddingHorizontal: wp(5),
                 marginTop: 0
+            },
+            commonRoundIconStyle2: {
+                width: wp(8), height: wp(8),
+                backgroundColor: colors.SECONDARY_ICON,
+                borderRadius: wp(10),
+                alignSelf: 'flex-end'
+            },
+            activeRideFoundtext: {
+                marginTop: wp(1),
+                fontSize: FontSizes.FONT_SIZE_18,
+                fontFamily: Fonts.FONT_POP_SEMI_BOLD,
+                marginBottom: wp(3),
+                color: colors.PRIMARY_TEXT,
+                textAlign: 'left'
+            },
+            mainContainerStyle: {
+                backgroundColor: colors.SEPARATOR_LINE,
+                borderRadius: wp(3),
+                padding: wp(2),
+            },
+            mainContainerShadowStyle: {
+                marginHorizontal: wp(0.5),
+                shadowColor: colors.SHADOW_2,
+                shadowOpacity: Platform.OS == "ios" ? 0.1 : 1,
+                shadowRadius: 3,
+                shadowOffset: { height: 0, width: 0 },
+                elevation: 5,
+            },
+            commonItemSeprator: {
+                backgroundColor: colors.SEPARATOR_LINE,
+                height: wp(0.5),
+                marginVertical: wp(3.5),
+                borderRadius: wp(2)
+            },
+            activerRideConatiner: {
+                backgroundColor: colors.PRIMARY_BACKGROUND,
+                borderRadius: wp(3),
+                padding: wp(3),
+                marginBottom: wp(4)
             }
         })
     );

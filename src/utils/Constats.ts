@@ -98,6 +98,72 @@ export const Reasons: ReasonsTypes[] = [
     }
 ];
 
+export const PreBookReasons: ReasonsTypes[] = [
+    {
+        id: 1,
+        title: TranslationKeys.not_confident_about_ride,
+        reason: AppStrings.pre_cancellations_reason.not_confident_about_ride,
+    },
+    {
+        id: 2,
+        title: TranslationKeys.no_need_ride,
+        reason: AppStrings.pre_cancellations_reason.no_need_ride
+    },
+    {
+        id: 3,
+        title: TranslationKeys.different_ride,
+        reason: AppStrings.pre_cancellations_reason.different_ride
+    },
+    {
+        id: 4,
+        title: TranslationKeys.no_diver_assigned,
+        reason: AppStrings.pre_cancellations_reason.no_diver_assigned
+    },
+    {
+        id: 5,
+        title: TranslationKeys.my_reason_is_not_listed,
+        reason: AppStrings.cancellations_reason.my_reason_is_not_listed
+    }
+];
+
+export const disputedReasons: ReasonsTypes[] = [
+    {
+        id: 1,
+        title: TranslationKeys.driver_took_longer_route,
+        reason: AppStrings.disputed_reason.driver_took_longer_route,
+    },
+    {
+        id: 2,
+        title: TranslationKeys.driver_was_rude,
+        reason: AppStrings.disputed_reason.driver_was_rude
+    },
+    {
+        id: 3,
+        title: TranslationKeys.driver_ask_extra_payment,
+        reason: AppStrings.disputed_reason.driver_ask_extra_payment
+    },
+    {
+        id: 4,
+        title: TranslationKeys.driver_made_stop,
+        reason: AppStrings.disputed_reason.driver_made_stop
+    },
+    {
+        id: 5,
+        title: TranslationKeys.driver_under_alcohol,
+        reason: AppStrings.disputed_reason.driver_under_alcohol
+    },
+    {
+        id: 6,
+        title: TranslationKeys.driver_brought_people,
+        reason: AppStrings.disputed_reason.driver_brought_people
+    },
+    {
+        id: 7,
+        title: TranslationKeys.please_specify_other,
+        reason: AppStrings.disputed_reason.please_specify_other
+    }
+];
+
 export const HomeBottomSheetType = {
     logOut: {
         snapPoint: ["27%"],
@@ -112,11 +178,11 @@ export const HomeBottomSheetType = {
         type: 'userName'
     },
     savedPlaces: {
-        snapPoint: ["32%"],
+        snapPoint: ["32%", "32%"],
         type: 'savedPlaces'
     },
     default: {
-        snapPoint: ["10%"],
+        snapPoint: ["1%"],
         type: ''
     },
 };
@@ -158,7 +224,8 @@ export const RIDE_STATUS = {
     ENDRIDE: "ENDRIDE",
     COMPLETED: "COMPLETED",
     CREATED: "CREATED",
-    PAYMENT_HOLD: "PAYMENT_HOLD"
+    PAYMENT_HOLD:"PAYMENT_HOLD",
+    DRIVER_ENDED:"DRIVER_ENDED"
 };
 
 export const PAYMENT_METHOD = {

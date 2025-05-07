@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, Modal, StyleSheet, Text, View } from 'react-native';
 import { useGlobalStyles } from '../../hooks/useGlobalStyles'
-import { useAppDispatch, useAppSelector } from '../../redux/Store';
+import { store, useAppDispatch, useAppSelector } from '../../redux/Store';
 import CustomHeader from '../../components/CustomHeader';
 import CustomContainer from '../../components/CustomContainer';
 import { widthPercentageToDP as wp } from 'react-native-responsive-screen';
@@ -17,12 +17,12 @@ import CustomBottomBtn from '../../components/CustomBottomBtn';
 import useCustomNavigation from '../../hooks/useCustomNavigation';
 import { BottomSheetBackdrop, BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import CommonErrorText from '../../components/CommonErrorText';
-import { cancelRide, resetRideOtpReducer, setRideDetailsData, setRideStatusReducer } from '../../redux/slice/rideSlice/RideSlice';
+import { cancelRide, resetRideOtpReducer, restActiveRideDetailsData, setCustomTip, setRideDetailsData, setRideStatusReducer, setTipAmount, setTipConatinerVisible } from '../../redux/slice/rideSlice/RideSlice';
 import { RootStackParamList } from '../../types/RootStackType';
 import { RouteProp, useIsFocused, useRoute } from '@react-navigation/native';
 import { resetRideDetails, setPaymentMethod } from '../../redux/slice/homeSlice/HomeSlice';
 import CustomActivityIndicator from '../../components/CustomActivityIndicator';
-import { RIDE_STATUS, Reasons } from '../../utils/Constats';
+import { PAYMENT_METHOD, PreBookReasons, RIDE_STATUS, Reasons, disputedReasons } from '../../utils/Constats';
 import { ANALYTICS_ID } from '../../utils/AnalyticsStringID';
 import analytics from '@react-native-firebase/analytics';
 import { TranslationKeys } from '../../localization/TranslationKeys';
@@ -34,6 +34,8 @@ import { ScrollView } from 'react-native';
 import { RIDE_DETAILS } from '../../config/Host';
 import i18n from '../../localization/i18n';
 import { current } from '@reduxjs/toolkit';
+import { navigationRef } from '../../utils/NavigationServices';
+import { getScrtachCardDetails, setScrtachCardDetails } from '../../redux/slice/referralSlice/ReferralSlice';
 
 export interface ReasonsTypes {
     id?: number,
@@ -53,17 +55,20 @@ const CancelTaxiScreen = () => {
     const styles = useStyles();
     const [cancellationsReason, setCancellationsReason] = useState<string>('');
     const [showErrorText, setShowErrorText] = useState<boolean>(false);
-    const [reasons, setReasons] = useState<ReasonsTypes[]>(Reasons)
+    const [isBtnDiabled, setIsBtnDisable] = useState<boolean>(false);
     const [selectedReason, setSelectedReason] = useState<ReasonsTypes | undefined>(undefined);
     const navigation = useCustomNavigation('CancelTaxiScreen')
     const bottomSheetRef = useRef<BottomSheet>(null);
     const snapPoints = useMemo(() => ['42%'], []);
     const dispatch = useAppDispatch();
-    const { isLoading , rideDetails} = useAppSelector(state => state.RideSlice)
+    const { isLoading, rideDetails } = useAppSelector(state => state.RideSlice)
     const { tokenDetail } = useAppSelector(state => state.AuthSlice)
     type NestedScreenRouteProp = RouteProp<RootStackParamList, 'CancelTaxiScreen'>;
     const route = useRoute<NestedScreenRouteProp>();
-    const { id } = route.params;
+    const { id, isDispute } = route.params;
+    const isPreBook = route?.params?.isPreBook ?? false
+    const isDisputed = (rideDetails?.rideStatus == RIDE_STATUS.ONGOING || rideDetails?.rideStatus == RIDE_STATUS.DRIVER_ENDED || isDispute)
+    const [reasons, setReasons] = useState<ReasonsTypes[]>(isDisputed ? disputedReasons : isPreBook ? PreBookReasons : Reasons)
     const { t } = useTranslation();
     const focus = useIsFocused()
     const [modalVisible, setModalVisible] = useState<ModalTypes>({
@@ -71,7 +76,7 @@ const CancelTaxiScreen = () => {
         type: ''
     })
     const isRideCancel = useRef(null)
-
+    const isRideBefore = store.getState().PaymentSlice.isPaymentBeforeAfter?.takePaymentBeforeRide
     const url = `${RIDE_DETAILS}${id}/`
     const ws = useRef<WebSocket>();
 
@@ -80,7 +85,7 @@ const CancelTaxiScreen = () => {
             connectionInit()
         }
         return () => {
-            if(ws?.current){
+            if (ws?.current) {
                 ws?.current?.close()
             }
             setModalVisible({
@@ -117,68 +122,84 @@ const CancelTaxiScreen = () => {
 
         ws?.current?.addEventListener("close", () => {
             console.log("CONNECTION CLOSE");
-            // if (focus && navigation.getId() == "TrackDriverScreen") {
+            // if (focus && navigationRef.current?.getCurrentRoute()?.name == "CancelTaxiScreen") {
             //     setTimeout(connectionInit, 2000);
             // }
         })
 
         ws?.current?.addEventListener('message', (message) => {
             const msgDetails = JSON.parse(message.data)
-            const { rideBooking } = msgDetails
-
+            console.log("MESSAGE--->", msgDetails)
+            const { rideBooking, find_driver_progress } = msgDetails
+            if (rideBooking) {
+                dispatch(setRideDetailsData(rideBooking))
+            }
             if (rideBooking?.rideStatus === RIDE_STATUS.CANCELLED) {
                 // setIsVisibleWaitingPaymentModal(false)
                 // dispatch(resetRideOtpReducer())
-                dispatch(setRideDetailsData(rideBooking))
                 dispatch(setRideStatusReducer(undefined))
                 setModalVisible({
                     modalVisible: true,
                     type: 'RideCancel'
                 })
+            } else if (rideBooking?.rideStatus === RIDE_STATUS.COMPLETED && rideBooking?.ridePayment?.paymentMethod === PAYMENT_METHOD.CASH) {
+
+                setModalVisible({
+                    modalVisible: true,
+                    type: 'PaymentSuccess'
+                })
+                dispatch(setRideStatusReducer(undefined))
             }
         }
         )
     };
-console.log("isride",isRideCancel.current)
+
     const handleClick = () => {
-        if(ws?.current){
+        dispatch(setTipConatinerVisible(false))
+        setIsBtnDisable(true)
+        if (ws?.current) {
             ws?.current?.close()
         }
-        setTimeout(() => {
-            if ((selectedReason && selectedReason?.reason)) {
-                setShowErrorText(false)
-                const data = new FormData()
-                data.append("ride_booking", id)
-                if (selectedReason.id == 6) {
-                    if (cancellationsReason.length > 255) {
-                        setShowErrorText(true)
-                        return
-                    } else {
-                        const reason = cancellationsReason.trim().length !== 0 ? cancellationsReason : selectedReason.reason
-                        data.append("reason", reason)
-                    }
-                } else {
-                    data.append("reason", selectedReason.reason)
-                }
-                let params = {
-                    formData: data,
-                }
-                dispatch(cancelRide(params)).unwrap()
-                    .then(res => {
-                            ws?.current?.close()
-                            console.log("WebSocket connection closed.");
-                        analytics().logEvent(ANALYTICS_ID.RIDE_CANCELLED)
-                        console.log(res)
-                        bottomSheetRef.current?.snapToIndex(0)
-                        dispatch(setPaymentMethod("Card"))
-                    })
-                    .catch(e => {
-                    })
-            } else {
-                setShowErrorText(true)
-                setCancellationsReason('')
+        if ((selectedReason && selectedReason?.reason)) {
+            setShowErrorText(false)
+            const data = new FormData()
+            data.append("ride_booking", id)
+            if (isDisputed) {
+                data.append("is_disputed", true)
             }
-        },1000)
+            if ((selectedReason?.id === 6 && !isPreBook && !isDisputed) || (selectedReason?.id === 5 && isPreBook) || (selectedReason?.id === 7 && isDisputed)) {
+                if (cancellationsReason.length > 255) {
+                    setIsBtnDisable(false)
+                    setShowErrorText(true)
+                    return
+                } else {
+                    const reason = cancellationsReason.trim().length !== 0 ? cancellationsReason : selectedReason.reason
+                    data.append("reason", reason)
+                }
+            } else {
+                data.append("reason", selectedReason.reason)
+            }
+            let params = {
+                formData: data,
+            }
+            dispatch(cancelRide(params)).unwrap()
+                .then(res => {
+                    ws?.current?.close()
+                    console.log("WebSocket connection closed.");
+                    analytics().logEvent(ANALYTICS_ID.RIDE_CANCELLED)
+                    console.log(res)
+                    bottomSheetRef.current?.snapToIndex(0)
+                    dispatch(setPaymentMethod("Card"))
+                    setIsBtnDisable(false)
+                    dispatch(restActiveRideDetailsData())
+                })
+                .catch(e => {
+                })
+        } else {
+            setIsBtnDisable(false)
+            setShowErrorText(true)
+            setCancellationsReason('')
+        }
     };
 
     const renderBackdrop = useCallback(
@@ -197,6 +218,8 @@ console.log("isride",isRideCancel.current)
         return (
             <CustomCheckBox
                 rightIconVisible
+                numberOfLines={3}
+                titleStyle={{ textAlign: 'left' }}
                 title={t(item?.title)} value={(selectedReason && selectedReason?.id == item.id) ? true : false} onPress={() => {
                     setShowErrorText(false)
                     const params = {
@@ -211,11 +234,21 @@ console.log("isride",isRideCancel.current)
         )
     }
 
+    const getScratchAmount = () => {
+        // if (paymentMethod == "Card") {
+        dispatch(getScrtachCardDetails(rideDetails?.id)).unwrap().then((res) => {
+            dispatch(setScrtachCardDetails(res?.data))
+        }).catch((error: any) => {
+            console.log("error", error)
+        })
+        // }
+    }
+
     return (
         <>
             <View style={GlobalStyle.container}>
                 {isLoading ? <CustomActivityIndicator /> : null}
-                <CustomHeader title={t(TranslationKeys.cancel_taxi)} onPress={() => navigation.goBack()} />
+                <CustomHeader title={isDisputed ? t(TranslationKeys.dispute_the_ride) : rideDetails?.deliveryDetails ? t(TranslationKeys.cancel_delivery) : t(TranslationKeys.cancel_taxi)} onPress={() => navigation.goBack()} />
                 <KeyboardAvoidingView
                     behavior={Platform.OS === "ios" ? "padding" : 'padding'}
                     keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : StatusBar.currentHeight} // 50 is Button height
@@ -224,21 +257,21 @@ console.log("isride",isRideCancel.current)
                     <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps={'handled'} showsVerticalScrollIndicator={false}>
                         <CustomContainer>
                             <Text
-                                numberOfLines={2} style={styles.reasonText}>{t(TranslationKeys.select_cancellations_reason)}</Text>
+                                numberOfLines={2} style={styles.reasonText}>{isDisputed ? t(TranslationKeys.select_dispution_reason) : t(TranslationKeys.select_cancellations_reason)}</Text>
                             <View>
                                 <FlatList
-                                    data={reasons}
+                                    data={isDisputed ? disputedReasons : isPreBook ? PreBookReasons : Reasons}
                                     bounces={false}
                                     renderItem={renderItem}
                                 />
                             </View>
-                            {selectedReason?.id === 6 ? <>
+                            {((selectedReason?.id === 6 && !isPreBook && !isDisputed) || (selectedReason?.id === 5 && isPreBook) || (selectedReason?.id === 7 && isDisputed)) ? <>
                                 <View style={styles.itemSeperatorLine} />
                                 <Text style={styles.textInputLabelText}>{t(TranslationKeys.other)}</Text>
                                 <CustomTextInput
                                     placeholder={t(TranslationKeys.enter_your_reason)} multiline
                                     textInputContainerStyle={styles.textInputContainerStyle} value={cancellationsReason}
-                                    editable={selectedReason?.id === 6}
+                                    editable={(selectedReason?.id === 6 && !isPreBook && !isDisputed) || (selectedReason?.id === 5 && isPreBook) || (selectedReason?.id === 7 && isDisputed)}
                                     returnKeyType={'done'}
                                     isError={showErrorText || cancellationsReason.length > 255}
                                     style={{
@@ -262,17 +295,18 @@ console.log("isride",isRideCancel.current)
                         </CustomContainer>
                     </ScrollView>
                 </KeyboardAvoidingView>
-                <CustomBottomBtn title={t(TranslationKeys.cancel_ride)} onPress={handleClick} />
-               
+                <CustomBottomBtn title={isDisputed ? t(TranslationKeys.submit_for_dispute) : rideDetails?.deliveryDetails ? t(TranslationKeys.cancel_delivery) : t(TranslationKeys.cancel_ride)} onPress={handleClick} disabled={isBtnDiabled} />
                 <CustomBottomSheet ref={bottomSheetRef}
+                    animateOnMount={false}
+                    enableDynamicSizing={false}
                     snapPoints={snapPoints}
                     index={-1}
                     backdropComponent={renderBackdrop}
                 >
                     <View style={styles.bottomSheetContainerStyle}>
                         <Image source={Icons.CANCELTAXIICON} style={styles.completedIcon} />
-                        <Text style={styles.headingText}>{t(TranslationKeys.booking_Cancelled)}</Text>
-                        <Text style={[GlobalStyle.subTitleStyle, styles.subtitleText]}>{t(TranslationKeys.cancelStatement)}</Text>
+                        <Text style={styles.headingText}>{isDisputed ? t(TranslationKeys.booking_disputed) : t(TranslationKeys.booking_Cancelled)}</Text>
+                        <Text style={[GlobalStyle.subTitleStyle, styles.subtitleText]}>{isDisputed ? t(TranslationKeys.disputStatement) : t(TranslationKeys.cancelStatement)}</Text>
                         <CustomPrimaryButton onPress={() => {
                             bottomSheetRef.current?.close()
                             navigation.reset(
@@ -288,7 +322,7 @@ console.log("isride",isRideCancel.current)
                         }} title={t(TranslationKeys.got_it)} style={styles.completedButton} />
                     </View>
                 </CustomBottomSheet>
-               
+
             </View>
             {(modalVisible.modalVisible) ?
                 <Modal
@@ -305,15 +339,28 @@ console.log("isride",isRideCancel.current)
                             modalVisible?.type === "RideCancel"
                                 ?
                                 <>
-                                    <Text style={styles.headingText}>{t(TranslationKeys.booking_Cancelled)}</Text>
-                                    <Text style={[GlobalStyle.subTitleStyle, styles.subtitleText]}>{t(TranslationKeys.cancellation_statement)}&nbsp;{rideDetails?.rideCancelBy?.reason}</Text>
+                                    <Text style={styles.headingText}>{rideDetails?.rideCancelBy?.isDisputedd ? t(TranslationKeys.booking_disputed) : t(TranslationKeys.booking_Cancelled)}</Text>
+                                    <Text style={[GlobalStyle.subTitleStyle, styles.subtitleText]}>{rideDetails?.rideCancelBy?.isDisputedd ? t(TranslationKeys.disputed_statement) : t(TranslationKeys.cancellation_statement)}&nbsp;{rideDetails?.rideCancelBy?.reason}</Text>
+                                </>
+                                : null
+                        }
+                        {
+                            modalVisible?.type === "PaymentSuccess"
+                                ?
+                                <>
+                                    <Text style={styles.headingText}>{!isRideBefore ? t(TranslationKeys.payment_success) : rideDetails?.deliveryDetails ? t(TranslationKeys.delivery_completed_success) : t(TranslationKeys.ride_completed_success)}</Text>
+                                    <Text style={[GlobalStyle.subTitleStyle, styles.subtitleText]}>{!isRideBefore ? t(TranslationKeys.payment_statement) : rideDetails?.deliveryDetails ? t(TranslationKeys.payment_statement_delivery) : t(TranslationKeys.payment_statement_ride)}</Text>
                                 </>
                                 : null
                         }
                     </View>
                     <CustomBottomBtn onPress={() => {
+                        dispatch(setRideStatusReducer(undefined))
                         dispatch(resetRideOtpReducer())
                         dispatch(setPaymentMethod("Card"))
+                        dispatch(setTipConatinerVisible(false))
+                        dispatch(setTipAmount(0))
+                        dispatch(setCustomTip(''))
                         if (modalVisible?.type === "RideCancel") {
                             navigation.reset({
                                 index: 0,
@@ -321,8 +368,30 @@ console.log("isride",isRideCancel.current)
                                     name: 'DrawerStack',
                                 }]
                             })
-                        } 
-                    }} title={t(TranslationKeys.got_it)}
+                        }
+                        else {
+                            getScratchAmount()
+                            analytics().logEvent(ANALYTICS_ID.RIDE_PAYMENT_COMPLETED, {
+                                'userDetails': {
+                                    'id': tokenDetail?.userData?.id,
+                                    'name': tokenDetail?.userData?.name,
+                                    'phoneNumber': tokenDetail?.userData?.phoneNumber
+                                }
+                            })
+                            navigation.reset({
+                                index: 1,
+                                routes: [{
+                                    name: 'DrawerStack',
+                                },
+                                {
+                                    name: 'RideBillScreen',
+                                    params: {
+                                        rideId: rideDetails?.id
+                                    }
+                                }]
+                            })
+                        }
+                    }} title={modalVisible?.type === "RideCancel" ? t(TranslationKeys.got_it) : rideDetails?.deliveryDetails ? t(TranslationKeys.view_delivery_bill) : t(TranslationKeys.view_ride_bill)}
                     // style={Styles.completedButton}
                     />
                 </Modal>

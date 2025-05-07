@@ -23,6 +23,7 @@ interface CustomCheckBoxProps {
     rightIconVisible?: boolean,
     index?: number
     name?: string
+    numberOfLines?: number
 };
 
 const CustomCheckBox = (props: CustomCheckBoxProps & TouchableOpacityProps) => {
@@ -37,19 +38,19 @@ const CustomCheckBox = (props: CustomCheckBoxProps & TouchableOpacityProps) => {
                 <View>
                     <Text style={Styles.name}>{props.name}</Text>
                 </View>}
-            <View style={[Styles.checkBoxContainerStyle, props.containerStyle]} >
+            <TouchableOpacity style={[Styles.checkBoxContainerStyle, props.containerStyle]}  {...props} activeOpacity={1}>
                 <View style={[GlobalStyle.rowContainer, Styles.containerStyle]}>
                     {props.rightIconVisible ?
-                        <TouchableOpacity {...props} activeOpacity={1}>
+                        <View>
                             {props.value ?
                                 <Image source={Icons.CHECKBOX} style={[Styles.activeIconStyle, props.activeIconStyle]} />
                                 :
                                 <View style={[Styles.inActiveIconStyle, props.inActiveIconStyle]} />
                             }
-                        </TouchableOpacity>
+                        </View>
                         : null
                     }
-                    <Text numberOfLines={1} style={[GlobalStyle.subTitleStyle, Styles.titleStyle, props.titleStyle]}>{props.title}</Text>
+                    <Text numberOfLines={props?.numberOfLines ?? 1} style={[GlobalStyle.subTitleStyle, Styles.titleStyle, props.titleStyle]}>{props.title}</Text>
                     {props.subTitle ? <Text numberOfLines={1} style={[GlobalStyle.subTitleStyle, Styles.subTitleStyle, props.subTitleStyle]}>{props.subTitle}</Text> : null}
                 </View>
                 {props.showCloseIcon ?
@@ -58,7 +59,7 @@ const CustomCheckBox = (props: CustomCheckBoxProps & TouchableOpacityProps) => {
                     </TouchableOpacity>
                     :
                     null}
-            </View>
+            </TouchableOpacity>
         </>
     );
 };
@@ -96,6 +97,7 @@ const useStyles = () => {
             titleStyle: {
                 marginLeft: wp(5),
                 fontSize: FontSizes.FONT_SIZE_16,
+                flex: 1
             },
             closeIconStyle: {
                 width: wp(4),

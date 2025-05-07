@@ -47,5 +47,6 @@ export const ApiConstants = {
 	PAYMENT_BEFORE_AFTER: APP_URL + "/admins/payment-gateway/",
 	ENDRIDE_CARD_PAYMENT: APP_URL + "/riders/end-ride/card-payment/",
 	RIDER_APP_STATE: APP_URL + "/riders/app-status/",
-	COMMON_CREDENTIALS: APP_URL + "/accounts/common-credentials/"
+	COMMON_CREDENTIALS: APP_URL + "/accounts/common-credentials/",
+	PHONE_VALIDATION: APP_URL + "/riders/delivery/booking/validate-phone/"
 };
