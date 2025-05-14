@@ -105,6 +105,7 @@ const HomeScreen = () => {
     const [showAlert, setShowAlert] = useState<boolean>(false);
     const [offset, setOffset] = useState(0);
     const [allowLocation, setAllowLocation] = useState(false);
+    const [PlaceFooterLoadd, setPlaceFooterLoad] = useState(false);
     const watchId = useRef<number | null>(null);
     const [appState, setAppState] = useState<'active' | 'background' | 'extension' | 'inactive' | 'unknown'>(stateType.active)
     const [askPer, setAskPer] = useState<boolean>(true);
@@ -364,7 +365,8 @@ const HomeScreen = () => {
                 bottomSheetRef.current?.snapToIndex(1)
             }
             setOffset(params.offset + 10)
-        }).catch(e => { })
+            setPlaceFooterLoad(false)
+        }).catch(e => { setPlaceFooterLoad(false) })
     };
 
     //! Get current location
@@ -661,7 +663,7 @@ const HomeScreen = () => {
 
     return (
         <SafeAreaView edges={['top']} style={GlobalStyle.container}>
-            {(isLoading || loading || isCodeLoading || isLoadingRecent || isFooterLoading) ? <CustomActivityIndicator /> : null}
+            {(isLoading || loading || isCodeLoading || isLoadingRecent || isFooterLoading) && !PlaceFooterLoadd ? <CustomActivityIndicator /> : null}
             {
                 !isVisiblePerModal ?
                     <ReactNativeModal
@@ -1032,12 +1034,14 @@ const HomeScreen = () => {
                                 <SavePlacesBottonSheetComponent
                                     title={t(TranslationKeys.where_to)}
                                     data={recentPlaceListData.results}
+                                    footerLoad={PlaceFooterLoadd}
                                     onEndReached={() => {
                                         if (recentPlaceListData?.next && !isLoading) {
                                             let params: ParamsTypeProps = {
                                                 offset: offset,
                                                 is_delivery_enable: false
                                             }
+                                            setPlaceFooterLoad(true)
                                             recentPlaceApiCall(params)
                                         }
                                     }}

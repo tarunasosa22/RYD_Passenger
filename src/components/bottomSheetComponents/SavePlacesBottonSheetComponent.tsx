@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import React from 'react'
 import { TouchableOpacity } from 'react-native';
 import { BottomSheetFlatList } from '@gorhom/bottom-sheet';
@@ -13,12 +13,14 @@ import { Fonts } from '../../styles/Fonts';
 import CustomTextInput from '../CustomTextInput';
 import { TranslationKeys } from '../../localization/TranslationKeys';
 import { useTranslation } from 'react-i18next';
+import CustomActivityIndicator from '../CustomActivityIndicator';
 
 interface SavePlacesBottonSheetComponentProps {
     onWherePress: () => void,
     onPress: (coords: RecentLocationsProps) => void,
     data: RecentLocationsProps[],
     onEndReached: () => void,
+    footerLoad?: boolean
     title: string
 };
 
@@ -78,7 +80,7 @@ const SavePlacesBottonSheetComponent = (props: SavePlacesBottonSheetComponentPro
             </TouchableOpacity>
             <BottomSheetFlatList
                 data={props?.data}
-                bounces={false}
+                // bounces={false}
                 ItemSeparatorComponent={() => {
                     return (
                         <View style={Styles.separatorComponentStyle} />
@@ -88,6 +90,14 @@ const SavePlacesBottonSheetComponent = (props: SavePlacesBottonSheetComponentPro
                 ListEmptyComponent={() => {
                     return (
                         <Text style={Styles.listEmptyTxtStyle}>{t(TranslationKeys.recent_locations_not_found)}</Text>
+                    )
+                }}
+                ListFooterComponent={() => {
+                    return (props.footerLoad ?
+                        <View style={{ flex: 1, backgroundColor: '#00000000' }}>
+                            <ActivityIndicator color={colors.PRIMARY} size={'small'} />
+                        </View>
+                        : null
                     )
                 }}
                 onEndReachedThreshold={0.02}
@@ -141,6 +151,7 @@ const useStyles = () => {
         listItemContainerStyle: {
             flex: 1,
             backgroundColor: colors.TRANSPARENT,
+            // backgroundColor: colors.TRANSPARENT,
             paddingVertical: wp(4),
             paddingHorizontal: wp(1),
             flexDirection: 'row',
@@ -166,7 +177,7 @@ const useStyles = () => {
             height: wp(0.4),
         },
         recentLocationListStyle: {
-            marginBottom: wp(5),
+            // marginBottom: wp(5),
             marginTop: wp(2)
         },
     });

@@ -105,6 +105,7 @@ const TrackDriverScreen = () => {
     const { rideId } = route.params;
     const bottomSheetRef = useRef<BottomSheet>(null);
     const [showBottomBtn, setShowBottomBtn] = useState<boolean>(false)
+    const [load, setLoad] = useState<boolean>(true)
     // const [snapPoint, setSnapPoint] = useState<string[]>([rideStatus === RIDE_STATUS.ENDRIDE ? "60%" : "35%"])
     const [snapPoint, setSnapPoint] = useState<string[]>(["35%", "35%"])
     const snapPoints = useMemo(() => snapPoint, [snapPoint]);
@@ -193,6 +194,7 @@ const TrackDriverScreen = () => {
 
     useEffect(() => {
         if (focus) {
+            setLoad(true)
             getLocation()
             connectionInit()
         }
@@ -279,6 +281,9 @@ const TrackDriverScreen = () => {
         setTimeout(() => {
             bottomSheetRef.current?.expand();
         }, 500);
+        // setTimeout(() => {
+        //     setLoad(false)
+        // }, 600);
 
     }, [rideStatus])
 
@@ -435,7 +440,7 @@ const TrackDriverScreen = () => {
 
         ws?.current.addEventListener("close", () => {
             console.log("CONNECTION CLOSE");
-
+            setLoad(true)
             if (focus && navigationRef.current?.getCurrentRoute()?.name == "TrackDriverScreen") {
                 setTimeout(connectionInit, 2000);
             }
@@ -446,6 +451,7 @@ const TrackDriverScreen = () => {
             const { rideBooking, driverLocation, rideBookingOtp } = msgDetails
             console.log("MESSAGE", message.data, driverLocation, rideBooking, rideBookingOtp);
             if (rideBooking && driverLocation) {
+                setLoad(false)
                 let paymentType = rideBooking?.ridePayment?.paymentMethod
                 let paymentCamelCase = paymentType.charAt(0).toUpperCase() + paymentType.slice(1).toLowerCase();
 
@@ -977,13 +983,13 @@ const TrackDriverScreen = () => {
     // );
 
     const renderFooter = (props: any, rideDetails: any) => {
-        // if (sheetIndex === 0) return null;
+        if (sheetIndex === 0) return null;
         if (rideDetails?.rideStatus !== RIDE_STATUS.ONGOING && rideDetails?.rideStatus !== RIDE_STATUS.DRIVER_ENDED) return null;
         return (
             <BottomSheetFooter {...props} bottomInset={0} style={{ backgroundColor: colors.SECONDARY_BACKGROUND }}>
                 <View style={{
                     paddingHorizontal: wp(6),
-                    paddingBottom: wp(2),
+                    paddingBottom: Platform.OS == 'android' ? wp(2) : wp(5),
                 }}>
                     <TouchableOpacity
                         disabled={(!isBeforeWithCard && (isBtnDiabled || rideDetails?.rideStatus !== RIDE_STATUS.DRIVER_ENDED)) || isBtnDisable}
@@ -1014,7 +1020,7 @@ const TrackDriverScreen = () => {
 
     return (
         <SafeAreaView edges={['top']} style={GlobalStyles.container}>
-            {(isLoading || loading || makePaymentLoading || !directionCoords || !driverLocationRef || !rideDetails) ?
+            {(isLoading || loading || makePaymentLoading || !directionCoords || !driverLocationRef || !rideDetails || load) ?
                 <ActivityIndicator
                     style={{
                         position: 'absolute',
@@ -1410,12 +1416,13 @@ const TrackDriverScreen = () => {
                 <Image source={Icons.SHARE_ICON} style={Styles.infoIconStyle} />
                 <Text numberOfLines={1} style={Styles.fareTxtStyle}>{t(TranslationKeys.share_live_location)}</Text>
             </TouchableOpacity>
-            {console.log("rideStatus-->", snapPoint)}
+            {console.log("rideStatus-->", snapPoint, load)}
             <CustomBottomSheet
                 ref={bottomSheetRef}
                 snapPoints={snapPoint}
                 index={0}
                 enablePanDownToClose={false}
+                detached={true}
                 footerComponent={(props) => renderFooter(props, rideDetails)}
                 animateOnMount={false}
                 keyboardBlurBehavior='restore'
@@ -1432,8 +1439,9 @@ const TrackDriverScreen = () => {
                     }
                 }}
             >
-                <BottomSheetScrollView nestedScrollEnabled style={{ backgroundColor: colors.TRANSPARENT, flex: 1 }}
-                    showsVerticalScrollIndicator={false}>
+                <BottomSheetScrollView nestedScrollEnabled style={{ backgroundColor: colors.TRANSPARENT, flexGrow: 1 }}
+                    showsVerticalScrollIndicator={false}
+                >
 
                     <TrackDriverBottomSheetComponent onPayment={(tip, payment_type, totalAmount) => {
                         // initializePaymentSheet()

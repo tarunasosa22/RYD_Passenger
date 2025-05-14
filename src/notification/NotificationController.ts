@@ -7,13 +7,13 @@ import { getFcmToken } from '../redux/slice/authSlice/AuthSlice';
 // import PushNotificationIOS from '@react-native-community/push-notification-ios';
 import { NOTIFICATION_TYPE, PICK_UP_MODE, RIDE_STATUS } from '../utils/Constats';
 import { navigationRef } from '../utils/NavigationServices';
-import notifee, { AndroidImportance, EventType } from '@notifee/react-native';
+import notifee, { AndroidImportance, AndroidStyle, EventType } from '@notifee/react-native';
 
 const NotificationController = () => {
 
     // handle Navigation On User Tap on Any mode notification
     const onNotificationTap = (remoteMessage: any) => {
-        console.log("🚀 ~ file: NotificationController.ts:120 ~ onNotificationTap ~ remoteMessage:", remoteMessage)
+        console.log("🚀 ~ file: NotificationController.ts:120 ~ onNotificationTap ~ remoteMessage:", remoteMessage?.data?.type)
         const userData = store.getState().AuthSlice.userDetail
         if (userData && remoteMessage) {
             // ** NAVIGATE TO SEARCHING SCREEN WHILE RIDE IS CREATED WITH PICKUP MODE NOW */
@@ -279,72 +279,6 @@ const NotificationController = () => {
         }
     }
 
-    // PushNotification.configure({
-    //     permissions: {
-    //         alert: true,
-    //         badge: true,
-    //         sound: true,
-    //     },
-    //     popInitialNotification: true,
-    //     requestPermissions: false,
-    //     onNotification: (notification) => {
-    //         console.log("NOTIFICATION:", notification);
-    //         notification.finish(PushNotificationIOS.FetchResult.NoData);
-    //         if (notification?.userInteraction) {
-    //             if (notification?.foreground) {
-    //                 if (Platform.OS == 'ios') {
-    //                     onNotificationTap(notification)
-    //                 } else {
-    //                     onNotificationTap(notification)
-    //                 }
-    //             }
-    //         }
-    //     }
-    // });
-
-    // useEffect(() => {
-    //     messaging().onNotificationOpenedApp((remoteMessage) => {
-    //         console.log("onNotificationOpenedApp = ", remoteMessage)
-    //         onNotificationTap(remoteMessage)
-    //     })
-    //     messaging().getInitialNotification().then((remoteMessage) => {
-    //         console.log("getInitialNotification = ", remoteMessage)
-    //         onNotificationTap(remoteMessage)
-    //     })
-    //     messaging().onMessage(async (remoteMessage) => {
-    //         console.log("onMessage = ", remoteMessage)
-    //         // if (Platform.OS == 'ios') {
-    //         //     PushNotificationIOS.addNotificationRequest({
-    //         //         title: remoteMessage?.notification?.title,
-    //         //         body: remoteMessage?.notification?.body,
-    //         //         id: remoteMessage?.messageId?.toString() ?? "",
-    //         //         userInfo: remoteMessage
-    //         //     })
-    //         // }
-    //         if (Platform.OS === 'android') {
-    //             // PushNotification.createChannel(
-    //             //     {
-    //             //         channelId: 'fcm_fallback_notification_channel', // (required)
-    //             //         channelName: 'fcm_fallback_notification_channel', // (required)
-    //             //     },
-    //             //     () => { },
-    //             // );
-    //             console.log("Platform.Version---->", Platform.Version)
-    //             // if (Platform.Version > 32) {
-    //             //     PushNotification.cancelAllLocalNotifications();
-    //             //     PushNotification.localNotification({
-    //             //         channelId: 'general_notification_channel',
-    //             //         message: remoteMessage?.notification?.body ?? '',
-    //             //         title: remoteMessage?.notification?.title ?? '',
-    //             //         bigPictureUrl: remoteMessage?.notification?.android?.imageUrl ?? undefined,
-    //             //         userInfo: remoteMessage?.data
-    //             //     });
-    //             // }
-    //         }
-    //     })
-
-    // }, [])
-
     useEffect(() => {
         requestUserPermission();
 
@@ -356,14 +290,7 @@ const NotificationController = () => {
                     break;
                 case EventType.PRESS:
                     console.log('User pressed notification', detail.notification);
-                    // notificationAction(
-                    //     detail?.notification?.data as {
-                    //         notification_type?: string | undefined;
-                    //         id?: string | undefined;
-                    //     },
-                    // );
-                    onNotificationTap(detail)
-
+                    onNotificationTap(detail.notification)
                     break;
                 case EventType.DELIVERED:
                     console.log('Notification delivered', detail.notification);
@@ -383,6 +310,8 @@ const NotificationController = () => {
                         pressAction: {
                             id: 'default',
                         },
+                        sound: 'default',
+                        style: { type: AndroidStyle.BIGPICTURE, picture: remoteMessage?.data?.image_url },
                     },
                     data: remoteMessage.data,
                 });
@@ -432,20 +361,7 @@ const NotificationController = () => {
                         name: 'Default',
                         lights: true,
                         vibration: true,
-                        importance: AndroidImportance.HIGH,
-                    },
-                    {
-                        id: 'orders',
-                        name: 'Orders',
-                        lights: true,
-                        vibration: true,
-                        importance: AndroidImportance.HIGH,
-                    },
-                    {
-                        id: 'transactions',
-                        name: 'Transactions',
-                        lights: true,
-                        vibration: true,
+                        sound: 'default',
                         importance: AndroidImportance.HIGH,
                     },
                 ]);
@@ -457,6 +373,10 @@ const NotificationController = () => {
             }
 
             // Request messaging permission
+            await notifee.requestPermission({
+                sound: true,
+                alert: true,
+            })
             const authStatus = await messaging().requestPermission();
             const enabled =
                 authStatus === messaging.AuthorizationStatus.AUTHORIZED ||

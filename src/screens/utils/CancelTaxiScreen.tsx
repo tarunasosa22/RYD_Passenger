@@ -339,8 +339,8 @@ const CancelTaxiScreen = () => {
                             modalVisible?.type === "RideCancel"
                                 ?
                                 <>
-                                    <Text style={styles.headingText}>{rideDetails?.rideCancelBy?.isDisputedd ? t(TranslationKeys.booking_disputed) : t(TranslationKeys.booking_Cancelled)}</Text>
-                                    <Text style={[GlobalStyle.subTitleStyle, styles.subtitleText]}>{rideDetails?.rideCancelBy?.isDisputedd ? t(TranslationKeys.disputed_statement) : t(TranslationKeys.cancellation_statement)}&nbsp;{rideDetails?.rideCancelBy?.reason}</Text>
+                                    <Text style={styles.headingText}>{rideDetails?.rideCancelBy?.isDisputed ? t(TranslationKeys.booking_disputed) : t(TranslationKeys.booking_Cancelled)}</Text>
+                                    <Text style={[GlobalStyle.subTitleStyle, styles.subtitleText]}>{rideDetails?.rideCancelBy?.isDisputed ? t(TranslationKeys.disputed_statement) : t(TranslationKeys.cancellation_statement)}&nbsp;{rideDetails?.rideCancelBy?.reason}</Text>
                                 </>
                                 : null
                         }

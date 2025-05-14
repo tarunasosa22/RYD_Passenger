@@ -211,6 +211,7 @@ const SearchingRiderScreen = () => {
                         dispatch(setIsComplateTimer(true))
                         setBottomSheetVisible(true)
                         wsRef.current?.close()
+                        bottomSheetRef.current?.expand()
                         bottomSheetRef.current?.snapToIndex(0)
                     }
                 } else {
@@ -221,6 +222,7 @@ const SearchingRiderScreen = () => {
                         dispatch(setIsComplateTimer(true))
                         setBottomSheetVisible(true)
                         wsRef.current?.close()
+                        bottomSheetRef.current?.expand()
                         bottomSheetRef.current?.snapToIndex(0)
                     } else if (msgDetails?.rideBooking?.isTimeOut == null || msgDetails?.find_driver_progress) {
                         progressStatus.current = msgDetails?.find_driver_progress
@@ -330,6 +332,7 @@ const SearchingRiderScreen = () => {
                 connectionInit()
             } else {
                 wsRef.current?.close()
+                bottomSheetRef.current?.expand()
                 bottomSheetRef?.current?.snapToIndex(0)
                 dispatch(setIsComplateTimer(true))
             }
@@ -453,6 +456,7 @@ const SearchingRiderScreen = () => {
                 setSteps(0)
                 clearInterval(intervalId)
                 setBottomSheetVisible(true)
+                bottomSheetRef.current?.expand()
                 bottomSheetRef.current?.snapToIndex(0)
                 dispatch(setCreateRideData(null))
                 dispatch(setCreateDeliveryRideData(null))
@@ -547,6 +551,7 @@ const SearchingRiderScreen = () => {
                                                 text: t(TranslationKeys.yes), onPress: () => {
                                                     dispatch(setIsRefundText(true))
                                                     setBottomSheetVisible(true)
+                                                    bottomSheetRef.current?.expand()
                                                     bottomSheetRef.current?.snapToIndex(0)
                                                     cancelRideBooking()
                                                     // BackHandler.exitApp()
@@ -647,6 +652,7 @@ const SearchingRiderScreen = () => {
                                     if (store.getState().PaymentSlice.isPaymentBeforeAfter?.takePaymentBeforeRide) {
                                         if (store.getState().HomeSlice.createDeliveryRideData?.ridePayment?.paymentMethod === "CARD" || store.getState().HomeSlice.createRideData?.ridePayment?.paymentMethod === "CARD") {
                                             setBottomSheetVisible(true)
+                                            bottomSheetRef.current?.expand()
                                             bottomSheetRef.current?.snapToIndex(0)
                                             dispatch(setIsRefundText(true))
                                             cancelRideBooking()

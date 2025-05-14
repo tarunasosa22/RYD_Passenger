@@ -67,7 +67,7 @@ const TrackDriverBottomSheetComponent = (props: TrackDriverBottomSheetComponentP
     const [location, setLocation] = useState<RideLocationTypes[] | []>([]);
     const { t } = useTranslation();
     const dispatch = useAppDispatch();
-    const bottomSheetRef = useRef<BottomSheet>(null);
+    const bottomSheetRef = useRef(null);
     const [isBtnDiabled, setIsBtnDiabled] = useState(false)
     const { setSelectPaymentMethod, selectPaymentMethod } = props
     const { langCode } = useLanguage()
@@ -218,7 +218,7 @@ const TrackDriverBottomSheetComponent = (props: TrackDriverBottomSheetComponentP
                     <CustomIconButton
                         onPress={() => {
                             setIsOpenPaymentOpetion(false)
-                            bottomSheetRef.current?.expand()
+                            bottomSheetRef.current?.open()
                         }}
                         icon={Icons.RIDE_INFO_ICON}
                         iconStyle={{ tintColor: colors.WHITE_ICON, height: wp(6.5), width: wp(6), resizeMode: 'contain' }}
