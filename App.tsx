@@ -20,7 +20,7 @@ import { setNetworkStatus } from './src/redux/slice/SettingSlice/SettingSlice';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 // import RideBillScreen from './src/screens/utils/RideBillScreen';
-
+// import { hideSplash, showSplash } from 'react-native-splash-view';
 // import * as Sentry from "@sentry/react-native";
 
 if (!__DEV__) {
@@ -87,6 +87,7 @@ const App = () => {
     });
     setTimeout(() => {
       SplashScreen.hide();
+      // hideSplash()
     }, 1500);
     return () => {
       removeNetInfoSubscription();
