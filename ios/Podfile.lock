@@ -154,7 +154,7 @@ PODS:
   - GoogleUtilities/UserDefaults (8.1.0):
     - GoogleUtilities/Logger
     - GoogleUtilities/Privacy
-  - GTMSessionFetcher/Core (4.4.0)
+  - GTMSessionFetcher/Core (4.5.0)
   - hermes-engine (0.75.4):
     - hermes-engine/Pre-built (= 0.75.4)
   - hermes-engine/Pre-built (0.75.4)
@@ -1505,8 +1505,6 @@ PODS:
     - React-Core
   - react-native-safe-area-context (5.4.0):
     - React-Core
-  - react-native-splash-screen (3.3.0):
-    - React-Core
   - react-native-webview (13.13.5):
     - DoubleConversion
     - glog
@@ -2040,7 +2038,7 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
-  - RNSVG (15.11.2):
+  - RNSVG (15.12.0):
     - React-Core
   - SDWebImage (5.11.1):
     - SDWebImage/Core (= 5.11.1)
@@ -2049,6 +2047,27 @@ PODS:
     - libwebp (~> 1.0)
     - SDWebImage/Core (~> 5.10)
   - SocketRocket (0.7.0)
+  - SplashView (0.0.11):
+    - DoubleConversion
+    - glog
+    - hermes-engine
+    - RCT-Folly (= 2024.01.01.00)
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - Yoga
   - VisionCamera (4.6.4):
     - VisionCamera/Core (= 4.6.4)
     - VisionCamera/React (= 4.6.4)
@@ -2113,7 +2132,6 @@ DEPENDENCIES:
   - react-native-razorpay (from `../node_modules/react-native-razorpay`)
   - react-native-restart (from `../node_modules/react-native-restart`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
-  - react-native-splash-screen (from `../node_modules/react-native-splash-screen`)
   - react-native-webview (from `../node_modules/react-native-webview`)
   - React-nativeconfig (from `../node_modules/react-native/ReactCommon`)
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
@@ -2161,6 +2179,7 @@ DEPENDENCIES:
   - RNScreens (from `../node_modules/react-native-screens`)
   - RNShare (from `../node_modules/react-native-share`)
   - RNSVG (from `../node_modules/react-native-svg`)
+  - SplashView (from `../node_modules/react-native-splash-view`)
   - VisionCamera (from `../node_modules/react-native-vision-camera`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
@@ -2305,8 +2324,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-restart"
   react-native-safe-area-context:
     :path: "../node_modules/react-native-safe-area-context"
-  react-native-splash-screen:
-    :path: "../node_modules/react-native-splash-screen"
   react-native-webview:
     :path: "../node_modules/react-native-webview"
   React-nativeconfig:
@@ -2401,6 +2418,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-share"
   RNSVG:
     :path: "../node_modules/react-native-svg"
+  SplashView:
+    :path: "../node_modules/react-native-splash-view"
   VisionCamera:
     :path: "../node_modules/react-native-vision-camera"
   Yoga:
@@ -2432,7 +2451,7 @@ SPEC CHECKSUMS:
   GoogleDataTransport: aae35b7ea0c09004c3797d53c8c41f66f219d6a7
   GoogleMaps: 8939898920281c649150e0af74aa291c60f2e77d
   GoogleUtilities: 00c88b9a86066ef77f0da2fab05f65d7768ed8e1
-  GTMSessionFetcher: 75b671f9e551e4c49153d4c4f8659ef4f559b970
+  GTMSessionFetcher: fc75fc972958dceedee61cb662ae1da7a83a91cf
   hermes-engine: ea92f60f37dba025e293cbe4b4a548fd26b610a0
   libwebp: 02b23773aedb6ff1fd38cec7a77b81414c6842a8
   lottie-ios: 8f97d3271e155c2d688875c29cd3c74908aef5f8
@@ -2486,7 +2505,6 @@ SPEC CHECKSUMS:
   react-native-razorpay: ab51e7be3d906f49b26198d978fc6f163e846d30
   react-native-restart: 0bc732f4461709022a742bb29bcccf6bbc5b4863
   react-native-safe-area-context: 9d72abf6d8473da73033b597090a80b709c0b2f1
-  react-native-splash-screen: 95994222cc95c236bd3cdc59fe45ed5f27969594
   react-native-webview: df1e438a80ad1a280404b5c00f0a92442880baea
   React-nativeconfig: 31072ab0146e643594f6959c7f970a04b6c9ddd0
   React-NativeModulesApple: 356d0eb7e3b79603e9d611cd3bac658a998c71db
@@ -2534,10 +2552,11 @@ SPEC CHECKSUMS:
   RNReanimated: 3519cc6f8206f78e20b767708e1832348c5e023f
   RNScreens: ede3944a7dc2e9e548010c23c18b70b1c84e41a4
   RNShare: 21fc955e489c42be93e7e50786f01a0579ab5549
-  RNSVG: 7d403633772d39f695b8a1ccb64db8499e807dac
+  RNSVG: e3ad69848b6357587545e0a49628b1148acf082c
   SDWebImage: a7f831e1a65eb5e285e3fb046a23fcfbf08e696d
   SDWebImageWebPCoder: 908b83b6adda48effe7667cd2b7f78c897e5111d
   SocketRocket: abac6f5de4d4d62d24e11868d7a2f427e0ef940d
+  SplashView: ccded47ff11309aabcf31d6cd2cb513595d87b5b
   VisionCamera: f56eaedde0d3fa095143b78374d29e89e71735f9
   Yoga: a9ef4f5c2cd79ad812110525ef61048be6a582a4
 
