@@ -311,8 +311,9 @@ const NotificationController = () => {
                             id: 'default',
                         },
                         sound: 'default',
-                        style: { type: AndroidStyle.BIGPICTURE, picture: remoteMessage?.data?.image_url },
-                    },
+                        ...(remoteMessage?.data?.image_url && {
+                            style: { type: AndroidStyle.BIGPICTURE, picture: remoteMessage.data.image_url }
+                        }),                    },
                     data: remoteMessage.data,
                 });
             }
@@ -349,11 +350,6 @@ const NotificationController = () => {
                 const permissionStatus = await PermissionsAndroid.request(
                     'android.permission.POST_NOTIFICATIONS',
                 );
-                if (permissionStatus !== PermissionsAndroid.RESULTS.GRANTED) {
-                    console.warn('Notification permission denied');
-                    return false;
-                }
-
                 // Create Android notification channels
                 await notifee.createChannels([
                     {
@@ -365,6 +361,12 @@ const NotificationController = () => {
                         importance: AndroidImportance.HIGH,
                     },
                 ]);
+                
+                if (permissionStatus !== PermissionsAndroid.RESULTS.GRANTED) {
+                    console.warn('Notification permission denied');
+                    return false;
+                }
+
             }
 
             // Register device for remote messages if not already registered

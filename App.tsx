@@ -9,7 +9,6 @@ import NetInfo from '@react-native-community/netinfo';
 import NetworkErrorModal from './src/components/NetworkErrorModal';
 import NotificationController from './src/notification/NotificationController';
 import { navigationRef } from './src/utils/NavigationServices';
-import SplashScreen from 'react-native-splash-screen';
 import { LogBox, Platform } from 'react-native';
 import SpInAppUpdates, {
   NeedsUpdateResponse,
@@ -20,7 +19,7 @@ import { setNetworkStatus } from './src/redux/slice/SettingSlice/SettingSlice';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 // import RideBillScreen from './src/screens/utils/RideBillScreen';
-// import { hideSplash, showSplash } from 'react-native-splash-view';
+import { hideSplash, showSplash } from 'react-native-splash-view';
 // import * as Sentry from "@sentry/react-native";
 
 if (!__DEV__) {
@@ -70,7 +69,7 @@ const App = () => {
     } catch (error) {
       console.error('In-app update check failed with error:', error);
       // Handle the specific error for InstallException (-10)
-      if (error.message.includes('InstallException: -10')) {
+      if ((error as Error).message?.includes('InstallException: -10')) {
         console.log('App is not installed from Google Play Store.');
       }
     }
@@ -86,8 +85,8 @@ const App = () => {
       setConnection(offline);
     });
     setTimeout(() => {
-      SplashScreen.hide();
-      // hideSplash()
+      // SplashScreen.hide();
+      hideSplash()
     }, 1500);
     return () => {
       removeNetInfoSubscription();

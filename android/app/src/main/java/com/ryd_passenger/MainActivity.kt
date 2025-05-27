@@ -6,7 +6,7 @@ import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
-import org.devio.rn.splashscreen.SplashScreen
+import com.splashview.SplashView
 
 class MainActivity : ReactActivity() {
 
@@ -18,7 +18,7 @@ class MainActivity : ReactActivity() {
 
   @SuppressLint("ResourceType")
   override fun onCreate(savedInstanceState: Bundle?) {
-      SplashScreen.show(this);
+      SplashView.showSplashView(this) // Show
       super.onCreate(null)
   }
   /**
